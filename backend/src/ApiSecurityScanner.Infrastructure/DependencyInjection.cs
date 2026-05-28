@@ -1,4 +1,6 @@
+using ApiSecurityScanner.Application;
 using ApiSecurityScanner.Domain.Interfaces;
+using ApiSecurityScanner.Infrastructure.OpenApi;
 using ApiSecurityScanner.Infrastructure.Persistence;
 using ApiSecurityScanner.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +16,7 @@ public static class DependencyInjection
         services.AddDbContext<ApiSecurityScannerDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
 
+        services.AddHttpClient<IOpenApiDocumentLoader, OpenApiDocumentLoader>();
         services.AddScoped<IScanRepository, ScanRepository>();
         return services;
     }

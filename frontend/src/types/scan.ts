@@ -1,5 +1,10 @@
 export type Severity = 'Low' | 'Medium' | 'High' | 'Critical'
 
+export interface ScanRequest {
+  targetName?: string
+  openApiUrl: string
+}
+
 export interface SecurityIssue {
   ruleCode: string
   severity: Severity

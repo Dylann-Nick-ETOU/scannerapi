@@ -1,6 +1,8 @@
 using ApiSecurityScanner.API.Middlewares;
 using ApiSecurityScanner.Application;
 using ApiSecurityScanner.Infrastructure;
+using ApiSecurityScanner.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,6 +31,12 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApiSecurityScannerDbContext>();
+    db.Database.EnsureCreated();
+}
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors("Frontend");
