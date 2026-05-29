@@ -36,26 +36,28 @@ public class ScansController(
 
     [HttpPost("file")]
     [Consumes("multipart/form-data")]
-    public async Task<ActionResult<ScanReportDto>> ScanFromFile([FromForm] IFormFile file, [FromForm] string? targetName, CancellationToken cancellationToken)
+    public async Task<ActionResult<ScanReportDto>> ScanFromFile([FromForm] ScanFileUploadRequest request, CancellationToken cancellationToken)
     {
-        if (file is null || file.Length == 0)
+        if (request.File is null || request.File.Length == 0)
         {
             return BadRequest(new { message = "File is required." });
         }
 
-        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var extension = Path.GetExtension(request.File.FileName).ToLowerInvariant();
         if (extension is not ".json" and not ".yaml" and not ".yml")
         {
             return BadRequest(new { message = "Only .json, .yaml, .yml files are accepted." });
         }
 
-        await using var stream = file.OpenReadStream();
+        await using var stream = request.File.OpenReadStream();
         using var reader = new StreamReader(stream);
         var content = await reader.ReadToEndAsync(cancellationToken);
 
         var report = await scanOpenApiFileUseCase.ExecuteAsync(new ScanFileRequestDto
         {
-            TargetName = string.IsNullOrWhiteSpace(targetName) ? Path.GetFileNameWithoutExtension(file.FileName) : targetName,
+            TargetName = string.IsNullOrWhiteSpace(request.TargetName)
+                ? Path.GetFileNameWithoutExtension(request.File.FileName)
+                : request.TargetName,
             FileContent = content
         }, cancellationToken);
 
