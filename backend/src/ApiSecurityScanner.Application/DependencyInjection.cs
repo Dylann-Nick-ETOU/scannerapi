@@ -22,6 +22,9 @@ public static class DependencyInjection
         services.AddScoped<ScanScoringService>();
         services.AddScoped<ScanOpenApiUseCase>();
         services.AddScoped<ScanOpenApiFileUseCase>();
+        services.AddScoped<GetAllScansUseCase>();
+        services.AddScoped<GetScanByIdUseCase>();
+        services.AddScoped<DeleteScanUseCase>();
         services.AddScoped<IValidator<DTOs.ScanRequestDto>, ScanRequestDtoValidator>();
         return services;
     }

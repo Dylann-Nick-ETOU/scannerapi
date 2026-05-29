@@ -29,3 +29,13 @@ export interface ScanReport {
   summary: ScanSummary
   issues: SecurityIssue[]
 }
+
+export interface ScanHistoryItem {
+  id: string
+  targetName: string
+  openApiUrl?: string | null
+  score: number
+  status: string
+  createdAt: string
+  issuesCount: number
+}

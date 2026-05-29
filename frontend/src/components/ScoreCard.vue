@@ -1,8 +1,16 @@
 <template>
-  <section class="rounded-2xl border border-cyan-900/50 bg-night/40 p-8">
-    <h3 class="text-xl text-cyan-100/70">Score de sécurité</h3>
-    <p class="mt-3 text-6xl font-semibold text-accent">{{ score }}</p>
-    <p class="text-xl text-cyan-200">/100</p>
+  <section class="rounded-2xl border border-cyan-800/70 bg-[#032a45]/85 p-8 text-center">
+    <div class="mx-auto flex h-52 w-52 items-center justify-center rounded-full border-[10px] border-warning text-center">
+      <div>
+        <p class="text-7xl leading-none">{{ score }}</p>
+        <p class="mt-2 text-3xl text-cyan-200">/100</p>
+      </div>
+    </div>
+
+    <div class="mx-auto mt-8 inline-flex items-center gap-2 rounded-xl border border-warning/50 bg-warning/10 px-4 py-2 text-warning">
+      ⚠ Risque modéré
+    </div>
+    <p class="mt-6 text-cyan-100/80">Votre API présente quelques vulnérabilités qui nécessitent une attention</p>
   </section>
 </template>
 

@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { ScanReport, ScanRequest } from '../types/scan'
+import type { ScanHistoryItem, ScanReport, ScanRequest } from '../types/scan'
 
 export const scanApi = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8082'
@@ -24,4 +24,18 @@ export async function scanFromFile(file: File, targetName?: string): Promise<Sca
   })
 
   return data
+}
+
+export async function getScans(): Promise<ScanHistoryItem[]> {
+  const { data } = await scanApi.get<ScanHistoryItem[]>('/api/scans')
+  return data
+}
+
+export async function getScanById(id: string): Promise<ScanReport> {
+  const { data } = await scanApi.get<ScanReport>(`/api/scans/${id}`)
+  return data
+}
+
+export async function deleteScan(id: string): Promise<void> {
+  await scanApi.delete(`/api/scans/${id}`)
 }

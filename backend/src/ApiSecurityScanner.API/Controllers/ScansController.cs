@@ -10,6 +10,9 @@ namespace ApiSecurityScanner.API.Controllers;
 public class ScansController(
     ScanOpenApiUseCase scanOpenApiUseCase,
     ScanOpenApiFileUseCase scanOpenApiFileUseCase,
+    GetAllScansUseCase getAllScansUseCase,
+    GetScanByIdUseCase getScanByIdUseCase,
+    DeleteScanUseCase deleteScanUseCase,
     IValidator<ScanRequestDto> validator) : ControllerBase
 {
     [HttpPost("url")]
@@ -58,11 +61,33 @@ public class ScansController(
     }
 
     [HttpGet]
-    public IActionResult GetAllScans() => StatusCode(StatusCodes.Status501NotImplemented);
+    public async Task<ActionResult<IReadOnlyList<ScanHistoryItemDto>>> GetAllScans(CancellationToken cancellationToken)
+    {
+        var scans = await getAllScansUseCase.ExecuteAsync(cancellationToken);
+        return Ok(scans);
+    }
 
     [HttpGet("{id:guid}")]
-    public IActionResult GetScanById(Guid id) => StatusCode(StatusCodes.Status501NotImplemented);
+    public async Task<ActionResult<ScanReportDto>> GetScanById(Guid id, CancellationToken cancellationToken)
+    {
+        var report = await getScanByIdUseCase.ExecuteAsync(id, cancellationToken);
+        if (report is null)
+        {
+            return NotFound(new { message = "Scan not found." });
+        }
+
+        return Ok(report);
+    }
 
     [HttpDelete("{id:guid}")]
-    public IActionResult DeleteScan(Guid id) => StatusCode(StatusCodes.Status501NotImplemented);
+    public async Task<IActionResult> DeleteScan(Guid id, CancellationToken cancellationToken)
+    {
+        var deleted = await deleteScanUseCase.ExecuteAsync(id, cancellationToken);
+        if (!deleted)
+        {
+            return NotFound(new { message = "Scan not found." });
+        }
+
+        return NoContent();
+    }
 }
