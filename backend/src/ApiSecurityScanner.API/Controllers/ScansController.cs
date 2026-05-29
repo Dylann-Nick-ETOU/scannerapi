@@ -3,10 +3,12 @@ using System.Text.Json;
 using ApiSecurityScanner.Application.DTOs;
 using ApiSecurityScanner.Application.UseCases;
 using FluentValidation;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ApiSecurityScanner.API.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class ScansController(
@@ -17,6 +19,8 @@ public class ScansController(
     DeleteScanUseCase deleteScanUseCase,
     IValidator<ScanRequestDto> validator) : ControllerBase
 {
+    private const long MaxUploadBytes = 2 * 1024 * 1024; // 2MB
+
     [HttpPost("url")]
     public async Task<ActionResult<ScanReportDto>> ScanFromUrl([FromBody] ScanRequestDto request, CancellationToken cancellationToken)
     {
@@ -41,6 +45,11 @@ public class ScansController(
         if (request.File is null || request.File.Length == 0)
         {
             return BadRequest(new { message = "File is required." });
+        }
+
+        if (request.File.Length > MaxUploadBytes)
+        {
+            return BadRequest(new { message = "File is too large. Maximum size is 2MB." });
         }
 
         var extension = Path.GetExtension(request.File.FileName).ToLowerInvariant();

@@ -5,6 +5,27 @@ export const scanApi = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8082'
 })
 
+let accessToken: string | null = null
+
+async function ensureDevToken(): Promise<void> {
+  if (accessToken) {
+    return
+  }
+
+  const { data } = await scanApi.post<{ accessToken: string }>('/api/auth/dev-token')
+  accessToken = data.accessToken
+}
+
+scanApi.interceptors.request.use(async (config) => {
+  if (config.url?.startsWith('/api/health') || config.url?.startsWith('/api/auth/')) {
+    return config
+  }
+
+  await ensureDevToken()
+  config.headers.Authorization = `Bearer ${accessToken}`
+  return config
+})
+
 export async function scanFromUrl(payload: ScanRequest): Promise<ScanReport> {
   const { data } = await scanApi.post<ScanReport>('/api/scans/url', payload)
   return data
