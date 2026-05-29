@@ -76,17 +76,15 @@ Tests ajoutés:
 
 ## Base de données / Migrations
 
-L'application initialise actuellement la base au démarrage avec `EnsureCreated()`.
+L'application applique désormais les migrations EF Core au démarrage avec `Migrate()`.
 
-Pour passer en migrations EF Core complètes:
+Si c'est le premier lancement, créez d'abord la migration initiale:
 
 ```bash
 cd backend
 dotnet ef migrations add InitialCreate --project src/ApiSecurityScanner.Infrastructure --startup-project src/ApiSecurityScanner.API
 dotnet ef database update --project src/ApiSecurityScanner.Infrastructure --startup-project src/ApiSecurityScanner.API
 ```
-
-Puis remplacer `EnsureCreated()` par `Migrate()` dans `Program.cs`.
 
 ## Exemples de scan
 
