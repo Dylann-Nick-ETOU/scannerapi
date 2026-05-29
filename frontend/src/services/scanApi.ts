@@ -39,3 +39,8 @@ export async function getScanById(id: string): Promise<ScanReport> {
 export async function deleteScan(id: string): Promise<void> {
   await scanApi.delete(`/api/scans/${id}`)
 }
+
+export async function exportScanJson(id: string): Promise<Blob> {
+  const { data } = await scanApi.get(`/api/scans/${id}/export`, { responseType: 'blob' })
+  return data as Blob
+}

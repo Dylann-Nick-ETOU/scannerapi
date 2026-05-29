@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using ApiSecurityScanner.Application.DTOs;
 using ApiSecurityScanner.Application.UseCases;
 using FluentValidation;
@@ -77,6 +79,20 @@ public class ScansController(
         }
 
         return Ok(report);
+    }
+
+    [HttpGet("{id:guid}/export")]
+    public async Task<IActionResult> ExportScan(Guid id, CancellationToken cancellationToken)
+    {
+        var report = await getScanByIdUseCase.ExecuteAsync(id, cancellationToken);
+        if (report is null)
+        {
+            return NotFound(new { message = "Scan not found." });
+        }
+
+        var payload = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });
+        var bytes = Encoding.UTF8.GetBytes(payload);
+        return File(bytes, "application/json", $"scan-{id}.json");
     }
 
     [HttpDelete("{id:guid}")]

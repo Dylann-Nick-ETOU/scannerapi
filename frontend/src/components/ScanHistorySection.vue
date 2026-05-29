@@ -14,7 +14,7 @@
     <p v-else-if="items.length === 0" class="text-cyan-200/70">Aucun scan enregistré.</p>
 
     <div v-else class="overflow-x-auto">
-      <table class="w-full min-w-[760px] text-left text-sm">
+      <table class="w-full min-w-[900px] text-left text-sm">
         <thead>
           <tr class="border-b border-cyan-900 text-cyan-100/70">
             <th class="py-3">Cible</th>
@@ -39,6 +39,12 @@
                   @click="$emit('view', item.id)"
                 >
                   Voir
+                </button>
+                <button
+                  class="rounded border border-cyan-700 px-3 py-1 text-cyan-100 hover:border-accent hover:text-accent"
+                  @click="$emit('export', item.id)"
+                >
+                  Exporter JSON
                 </button>
                 <button
                   class="rounded border border-critical/60 px-3 py-1 text-critical hover:bg-critical/10"
@@ -66,6 +72,7 @@ defineProps<{
 defineEmits<{
   refresh: []
   view: [id: string]
+  export: [id: string]
   remove: [id: string]
 }>()
 

@@ -40,6 +40,14 @@
 
         <section v-else-if="page === 'rapport'" key="rapport" class="space-y-6">
           <template v-if="report">
+            <div class="flex items-center justify-end">
+              <button
+                class="rounded-lg border border-cyan-700 px-4 py-2 text-sm text-cyan-100 hover:border-accent hover:text-accent"
+                @click="handleExportScan(report.scanId)"
+              >
+                Exporter le rapport JSON
+              </button>
+            </div>
             <div class="grid gap-6 md:grid-cols-[1fr_1.45fr] md:items-start">
               <ScoreCard :score="report.score" />
               <IssuesSummary :summary="report.summary" />
@@ -64,6 +72,7 @@
             :loading="historyLoading"
             @refresh="loadHistory"
             @view="handleViewScan"
+            @export="handleExportScan"
             @remove="handleDeleteScan"
           />
         </section>
@@ -82,7 +91,7 @@ import RecommendationCard from './components/RecommendationCard.vue'
 import ScanForm from './components/ScanForm.vue'
 import ScanHistorySection from './components/ScanHistorySection.vue'
 import ScoreCard from './components/ScoreCard.vue'
-import { deleteScan, getScanById, getScans, scanFromFile, scanFromUrl } from './services/scanApi'
+import { deleteScan, exportScanJson, getScanById, getScans, scanFromFile, scanFromUrl } from './services/scanApi'
 import type { ScanHistoryItem, ScanReport } from './types/scan'
 
 type Page = 'accueil' | 'scanner' | 'rapport' | 'historique' | 'avant-apres' | 'recommandations'
@@ -161,6 +170,23 @@ async function handleViewScan(id: string) {
     console.error(err)
   } finally {
     loading.value = false
+  }
+}
+
+async function handleExportScan(id: string) {
+  try {
+    const blob = await exportScanJson(id)
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `scan-${id}.json`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (err) {
+    error.value = 'Impossible d\'exporter ce scan.'
+    console.error(err)
   }
 }
 
