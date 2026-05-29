@@ -13,6 +13,11 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<ISecurityRule, MissingAuthenticationRule>();
+        services.AddScoped<ISecurityRule, SensitiveEndpointRule>();
+        services.AddScoped<ISecurityRule, SensitiveDataExposureRule>();
+        services.AddScoped<ISecurityRule, WeakInputValidationRule>();
+        services.AddScoped<ISecurityRule, InsecureServerUrlRule>();
+
         services.AddScoped<SecurityRuleEngine>();
         services.AddScoped<ScanScoringService>();
         services.AddScoped<ScanOpenApiUseCase>();
