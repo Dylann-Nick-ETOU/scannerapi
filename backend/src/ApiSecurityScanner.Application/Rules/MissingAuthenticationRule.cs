@@ -1,5 +1,48 @@
+using ApiSecurityScanner.Domain.Entities;
+using ApiSecurityScanner.Domain.Enums;
+using ApiSecurityScanner.Domain.Interfaces;
+using Microsoft.OpenApi.Models;
+
 namespace ApiSecurityScanner.Application.Rules;
 
-public class MissingAuthenticationRule
+public class MissingAuthenticationRule : ISecurityRule
 {
+    public string RuleCode => "API-AUTH-001";
+    public string Name => "Missing Authentication";
+
+    public IReadOnlyList<SecurityIssue> Evaluate(object document)
+    {
+        if (document is not OpenApiDocument openApi)
+        {
+            return [];
+        }
+
+        var issues = new List<SecurityIssue>();
+
+        foreach (var (path, pathItem) in openApi.Paths)
+        {
+            foreach (var operation in pathItem.Operations)
+            {
+                var hasOperationSecurity = operation.Value.Security is { Count: > 0 };
+                var hasGlobalSecurity = openApi.SecurityRequirements is { Count: > 0 };
+                if (hasOperationSecurity || hasGlobalSecurity)
+                {
+                    continue;
+                }
+
+                issues.Add(new SecurityIssue
+                {
+                    RuleCode = RuleCode,
+                    Severity = SeverityLevel.High,
+                    Endpoint = $"{operation.Key} {path}",
+                    Title = "Endpoint sans authentification",
+                    Description = "Cet endpoint semble exposé sans mécanisme d'authentification.",
+                    Recommendation = "Ajouter JWT/OAuth2.",
+                    OwaspCategory = "Broken Authentication"
+                });
+            }
+        }
+
+        return issues;
+    }
 }

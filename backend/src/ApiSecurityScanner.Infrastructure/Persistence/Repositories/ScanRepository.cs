@@ -12,6 +12,12 @@ public class ScanRepository(ApiSecurityScannerDbContext dbContext) : IScanReposi
     public async Task<IReadOnlyList<Scan>> GetAllAsync(CancellationToken cancellationToken = default) =>
         await dbContext.Scans.OrderByDescending(x => x.CreatedAt).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Scan>> GetAllWithIssuesAsync(CancellationToken cancellationToken = default) =>
+        await dbContext.Scans
+            .Include(x => x.SecurityIssues)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync(cancellationToken);
+
     public async Task AddAsync(Scan entity, CancellationToken cancellationToken = default) =>
         await dbContext.Scans.AddAsync(entity, cancellationToken);
 

@@ -16,3 +16,10 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Frontend generated
+frontend/dist/
+frontend/node_modules/
+frontend/tsconfig.tsbuildinfo
+frontend/vite.config.js
+.env
