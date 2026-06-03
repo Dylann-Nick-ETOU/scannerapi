@@ -4,11 +4,29 @@
 
 :root {
   color: #ffffff;
-  background: linear-gradient(135deg, #001f33 0%, #003b5c 100%);
+  background: #001f33;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  font-family: 'Segoe UI', sans-serif;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   min-height: 100vh;
+  color: #ffffff;
+  background-color: #001f33;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.grid-bg {
+  background-color: #002844;
+  background-image:
+    linear-gradient(rgba(13, 66, 98, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(13, 66, 98, 0.35) 1px, transparent 1px);
+  background-size: 40px 40px;
 }

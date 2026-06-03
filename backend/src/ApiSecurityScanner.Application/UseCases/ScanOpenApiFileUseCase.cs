@@ -6,23 +6,23 @@ using ApiSecurityScanner.Domain.Interfaces;
 
 namespace ApiSecurityScanner.Application.UseCases;
 
-public class ScanOpenApiUseCase(
+public class ScanOpenApiFileUseCase(
     IOpenApiDocumentLoader documentLoader,
     SecurityRuleEngine ruleEngine,
     ScanScoringService scoringService,
     IScanRepository scanRepository)
 {
-    public async Task<ScanReportDto> ExecuteAsync(ScanRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<ScanReportDto> ExecuteAsync(ScanFileRequestDto request, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.OpenApiUrl);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.FileContent);
 
-        var document = await documentLoader.LoadFromUrlAsync(request.OpenApiUrl, cancellationToken);
+        var document = documentLoader.LoadFromText(request.FileContent);
         var issues = ruleEngine.Analyze(document).ToList();
 
         var scan = new Scan
         {
-            TargetName = request.TargetName ?? new Uri(request.OpenApiUrl).Host,
-            OpenApiUrl = request.OpenApiUrl,
+            TargetName = request.TargetName ?? "uploaded-openapi-file",
+            OpenApiUrl = null,
             Status = ScanStatus.Completed,
             Score = scoringService.ComputeScore(issues)
         };

@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: scannerapi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - scannerapi_postgres_data:/var/lib/postgresql/data
+    networks:
+      - app
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    container_name: scannerapi-backend
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      Jwt__Issuer: ${JWT_ISSUER:-ApiSecurityScanner}
+      Jwt__Audience: ${JWT_AUDIENCE:-ApiSecurityScanner.Frontend}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY}
+    expose:
+      - "8080"
+    networks:
+      - app
+
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+    container_name: scannerapi-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    expose:
+      - "80"
+    networks:
+      - app
+      - reverse-proxy
+
+volumes:
+  scannerapi_postgres_data:
+
+networks:
+  app:
+    name: scannerapi-network
+  reverse-proxy:
+    external: true
+    name: reverse-proxy
