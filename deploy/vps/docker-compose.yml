@@ -26,6 +26,7 @@ services:
       Jwt__Issuer: ${JWT_ISSUER:-ApiSecurityScanner}
       Jwt__Audience: ${JWT_AUDIENCE:-ApiSecurityScanner.Frontend}
       Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      Jwt__AllowTokenBootstrapInProduction: ${JWT_ALLOW_TOKEN_BOOTSTRAP_IN_PRODUCTION:-false}
     expose:
       - "8080"
     networks:

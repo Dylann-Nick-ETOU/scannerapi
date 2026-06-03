@@ -15,7 +15,10 @@ public class AuthController(IConfiguration configuration, IWebHostEnvironment en
     [AllowAnonymous]
     public IActionResult GetDevToken()
     {
-        if (!environment.IsDevelopment())
+        var allowTokenBootstrapInProduction =
+            configuration.GetValue<bool>("Jwt:AllowTokenBootstrapInProduction");
+
+        if (!environment.IsDevelopment() && !allowTokenBootstrapInProduction)
         {
             return NotFound();
         }
