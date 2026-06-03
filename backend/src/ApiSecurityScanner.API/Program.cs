@@ -99,7 +99,17 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
-        db.Database.Migrate();
+        var hasMigrations = db.Database.GetMigrations().Any();
+
+        if (hasMigrations)
+        {
+            db.Database.Migrate();
+        }
+        else
+        {
+            logger.LogWarning("No EF Core migrations were found. Falling back to EnsureCreated().");
+            db.Database.EnsureCreated();
+        }
     }
     catch (Exception ex)
     {
