@@ -5,6 +5,7 @@ using ApiSecurityScanner.Infrastructure;
 using ApiSecurityScanner.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -159,8 +160,8 @@ static void EnsureApplicationSchema(
             return;
         }
 
-        logger.LogWarning("Application tables were not found. Creating schema via EnsureCreated().");
-        db.Database.EnsureCreated();
+        logger.LogWarning("Application tables were not found. Creating schema via relational database creator.");
+        db.GetService<IRelationalDatabaseCreator>().CreateTables();
     }
     finally
     {
