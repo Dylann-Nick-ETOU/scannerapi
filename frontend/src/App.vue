@@ -83,6 +83,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import axios from 'axios'
 import BeforeAfterSection from './components/BeforeAfterSection.vue'
 import HeroSection from './components/HeroSection.vue'
 import IssuesSummary from './components/IssuesSummary.vue'
@@ -136,7 +137,7 @@ async function handleScanUrl(url: string) {
     page.value = 'rapport'
   } catch (err: unknown) {
     report.value = null
-    error.value = 'Impossible de scanner cette URL. Vérifiez que le document OpenAPI est accessible.'
+    error.value = extractApiError(err, 'Impossible de scanner cette URL. Vérifiez que le document OpenAPI est accessible.')
     console.error(err)
   } finally {
     loading.value = false
@@ -152,7 +153,7 @@ async function handleScanFile(file: File) {
     page.value = 'rapport'
   } catch (err: unknown) {
     report.value = null
-    error.value = 'Impossible de scanner ce fichier. Vérifiez le format OpenAPI JSON/YAML.'
+    error.value = extractApiError(err, 'Impossible de scanner ce fichier. Vérifiez le format OpenAPI JSON/YAML.')
     console.error(err)
   } finally {
     loading.value = false
@@ -166,7 +167,7 @@ async function handleViewScan(id: string) {
     report.value = await getScanById(id)
     page.value = 'rapport'
   } catch (err) {
-    error.value = 'Impossible de charger ce rapport.'
+    error.value = extractApiError(err, 'Impossible de charger ce rapport.')
     console.error(err)
   } finally {
     loading.value = false
@@ -196,9 +197,20 @@ async function handleDeleteScan(id: string) {
     if (report.value?.scanId === id) report.value = null
     await loadHistory()
   } catch (err) {
-    error.value = 'Impossible de supprimer ce scan.'
+    error.value = extractApiError(err, 'Impossible de supprimer ce scan.')
     console.error(err)
   }
+}
+
+function extractApiError(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    const message = err.response?.data?.message
+    if (typeof message === 'string' && message.trim().length > 0) {
+      return message
+    }
+  }
+
+  return fallback
 }
 
 onMounted(loadHistory)
