@@ -97,7 +97,8 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApiSecurityScannerDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseMigration");
+    Microsoft.Extensions.Logging.ILogger logger =
+        scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseMigration");
 
     try
     {
@@ -138,7 +139,9 @@ app.MapHealthChecks("/api/health");
 
 app.Run();
 
-static void EnsureApplicationSchema(ApiSecurityScannerDbContext db, ILogger logger)
+static void EnsureApplicationSchema(
+    ApiSecurityScannerDbContext db,
+    Microsoft.Extensions.Logging.ILogger logger)
 {
     var connection = (NpgsqlConnection)db.Database.GetDbConnection();
     var wasClosed = connection.State != System.Data.ConnectionState.Open;
