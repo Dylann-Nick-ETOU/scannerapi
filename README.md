@@ -99,3 +99,50 @@ Pipeline fourni dans `Jenkinsfile`:
 
 1. restore/build/test backend
 2. build frontend
+3. déploiement Docker sur le VPS pour la branche `main`
+
+### Déploiement VPS via Jenkins
+
+Le dossier `deploy/vps` contient le compose de production attendu par Jenkins.
+
+Prérequis côté VPS:
+
+1. créer le réseau Docker partagé avec le reverse proxy:
+
+```bash
+docker network create reverse-proxy
+```
+
+2. faire joindre le conteneur `nginx` de ton stack principal à ce réseau externe
+3. configurer Jenkins avec deux credentials de type `Secret text`:
+   - `api-security-scanner-db-password`
+   - `api-security-scanner-jwt-signing-key`
+
+Le pipeline déploie ensuite:
+
+- `scannerapi-frontend`
+- `scannerapi-backend`
+- `scannerapi-postgres`
+
+### Reverse proxy Nginx du VPS
+
+Ton Nginx public doit pointer vers `scannerapi-frontend:80` sur le réseau `reverse-proxy`.
+
+Exemple de bloc serveur:
+
+```nginx
+server {
+    server_name scanapi.dylannnick.fr;
+
+    location / {
+        proxy_pass http://scannerapi-frontend:80;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Le frontend proxyfie déjà `/api/` vers le backend. Il n'y a donc pas besoin d'une seconde règle `/api` dans le Nginx public.

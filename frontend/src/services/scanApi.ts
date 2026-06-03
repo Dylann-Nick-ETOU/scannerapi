@@ -2,7 +2,7 @@ import axios from 'axios'
 import type { ScanHistoryItem, ScanReport, ScanRequest } from '../types/scan'
 
 export const scanApi = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8082'
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api'
 })
 
 let accessToken: string | null = null
