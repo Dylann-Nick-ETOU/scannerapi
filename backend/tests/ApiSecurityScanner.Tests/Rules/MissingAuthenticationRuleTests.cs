@@ -12,7 +12,7 @@ public class MissingAuthenticationRuleTests
         var rule = new MissingAuthenticationRule();
         var document = new OpenApiDocument
         {
-            Paths =
+            Paths = new OpenApiPaths
             {
                 ["/admin/users"] = new OpenApiPathItem
                 {
