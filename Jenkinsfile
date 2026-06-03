@@ -31,7 +31,6 @@ pipeline {
     }
 
     stage('Deploy VPS') {
-      when { branch 'main' }
       steps {
         withCredentials([
           string(credentialsId: 'api-security-scanner-db-password', variable: 'POSTGRES_PASSWORD'),
