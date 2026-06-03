@@ -5,9 +5,11 @@ using ApiSecurityScanner.Infrastructure;
 using ApiSecurityScanner.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Npgsql;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -107,8 +109,8 @@ using (var scope = app.Services.CreateScope())
         }
         else
         {
-            logger.LogWarning("No EF Core migrations were found. Falling back to EnsureCreated().");
-            db.Database.EnsureCreated();
+            logger.LogWarning("No EF Core migrations were found. Falling back to direct schema bootstrap.");
+            EnsureApplicationSchema(db, logger);
         }
     }
     catch (Exception ex)
@@ -135,3 +137,47 @@ app.MapControllers();
 app.MapHealthChecks("/api/health");
 
 app.Run();
+
+static void EnsureApplicationSchema(ApiSecurityScannerDbContext db, ILogger logger)
+{
+    var connection = (NpgsqlConnection)db.Database.GetDbConnection();
+    var wasClosed = connection.State != System.Data.ConnectionState.Open;
+
+    if (wasClosed)
+    {
+        connection.Open();
+    }
+
+    try
+    {
+        if (ApplicationTablesExist(connection))
+        {
+            logger.LogInformation("Application tables already exist.");
+            return;
+        }
+
+        logger.LogWarning("Application tables were not found. Creating schema via EnsureCreated().");
+        db.Database.EnsureCreated();
+    }
+    finally
+    {
+        if (wasClosed)
+        {
+            connection.Close();
+        }
+    }
+}
+
+static bool ApplicationTablesExist(NpgsqlConnection connection)
+{
+    using var command = connection.CreateCommand();
+    command.CommandText = """
+        SELECT COUNT(*)
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name IN ('Scans', 'SecurityIssues');
+        """;
+
+    var count = (long)(command.ExecuteScalar() ?? 0L);
+    return count == 2;
+}
