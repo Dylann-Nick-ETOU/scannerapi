@@ -10,6 +10,24 @@ public class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Exception
         {
             await next(context);
         }
+        catch (ArgumentException ex)
+        {
+            logger.LogWarning(ex, "Request validation failed");
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            context.Response.ContentType = "application/json";
+
+            var payload = new { message = ex.Message };
+            await context.Response.WriteAsync(JsonSerializer.Serialize(payload));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            logger.LogWarning(ex, "Unauthorized request");
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.ContentType = "application/json";
+
+            var payload = new { message = "Unauthorized." };
+            await context.Response.WriteAsync(JsonSerializer.Serialize(payload));
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Unhandled exception");

@@ -3,6 +3,8 @@ using System.Text.RegularExpressions;
 using ApiSecurityScanner.Application;
 using Microsoft.OpenApi.Models;
 using Microsoft.OpenApi.Readers;
+using System.Net;
+using System.Net.Sockets;
 
 namespace ApiSecurityScanner.Infrastructure.OpenApi;
 
@@ -10,28 +12,23 @@ public class OpenApiDocumentLoader(HttpClient httpClient) : IOpenApiDocumentLoad
 {
     public async Task<OpenApiDocument> LoadFromUrlAsync(string url, CancellationToken cancellationToken = default)
     {
-        var candidates = BuildCandidateUrls(url);
-        Exception? lastException = null;
-
-        foreach (var candidate in candidates)
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
         {
-            try
-            {
-                using var response = await httpClient.GetAsync(candidate, cancellationToken);
-                response.EnsureSuccessStatusCode();
-
-                var content = await response.Content.ReadAsStringAsync(cancellationToken);
-                return Parse(content);
-            }
-            catch (Exception ex)
-            {
-                lastException = ex;
-            }
+            throw new ArgumentException("The OpenAPI URL must be absolute.", nameof(url));
         }
 
-        throw new InvalidOperationException(
-            $"Unable to download/parse OpenAPI document from '{url}'. Tried: {string.Join(", ", candidates)}",
-            lastException);
+        ValidateTargetUri(uri);
+
+        using var response = await httpClient.GetAsync(uri, cancellationToken);
+        if ((int)response.StatusCode is >= 300 and < 400 || response.Headers.Location is not null)
+        {
+            throw new ArgumentException("Redirect responses are not allowed for OpenAPI URLs.", nameof(url));
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
+        return Parse(content);
     }
 
     public OpenApiDocument LoadFromText(string content)
@@ -39,49 +36,90 @@ public class OpenApiDocumentLoader(HttpClient httpClient) : IOpenApiDocumentLoad
         return Parse(content);
     }
 
-    private static List<string> BuildCandidateUrls(string rawUrl)
+    private static void ValidateTargetUri(Uri uri)
     {
-        var candidates = new List<string> { rawUrl };
-
-        if (!Uri.TryCreate(rawUrl, UriKind.Absolute, out var uri))
+        if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         {
-            return candidates;
+            throw new ArgumentException("Only HTTP and HTTPS URLs are allowed.");
         }
 
-        var isLoopback = string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase)
-            || uri.Host == "127.0.0.1";
-
-        if (!isLoopback)
+        if (!string.IsNullOrWhiteSpace(uri.UserInfo))
         {
-            return candidates;
+            throw new ArgumentException("Userinfo is not allowed in OpenAPI URLs.");
         }
 
-        var inContainer = string.Equals(
-            Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
-            "true",
-            StringComparison.OrdinalIgnoreCase);
-
-        if (!inContainer)
+        if (uri.IsLoopback || string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase))
         {
-            return candidates;
+            throw new ArgumentException("Loopback addresses are not allowed for OpenAPI URLs.");
         }
 
-        var hostGateway = new UriBuilder(uri) { Host = "host.docker.internal" }.Uri.ToString();
-        if (!candidates.Contains(hostGateway, StringComparer.OrdinalIgnoreCase))
+        if (IPAddress.TryParse(uri.Host, out var ipAddress))
         {
-            candidates.Add(hostGateway);
+            EnsurePublicIpAddress(ipAddress);
+            return;
         }
 
-        if (uri.Port != 8080)
+        IPAddress[] addresses;
+        try
         {
-            var internalUrl = new UriBuilder(uri) { Host = "localhost", Port = 8080 }.Uri.ToString();
-            if (!candidates.Contains(internalUrl, StringComparer.OrdinalIgnoreCase))
+            addresses = Dns.GetHostAddresses(uri.Host);
+        }
+        catch (SocketException ex)
+        {
+            throw new ArgumentException($"Unable to resolve host '{uri.Host}'.", ex);
+        }
+
+        if (addresses.Length == 0)
+        {
+            throw new ArgumentException($"Unable to resolve host '{uri.Host}'.");
+        }
+
+        foreach (var address in addresses)
+        {
+            EnsurePublicIpAddress(address);
+        }
+    }
+
+    private static void EnsurePublicIpAddress(IPAddress address)
+    {
+        if (IPAddress.IsLoopback(address))
+        {
+            throw new ArgumentException("Loopback addresses are not allowed for OpenAPI URLs.");
+        }
+
+        if (address.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            if (address.IsIPv6LinkLocal || address.IsIPv6Multicast || address.IsIPv6SiteLocal || address.IsIPv6Teredo)
             {
-                candidates.Add(internalUrl);
+                throw new ArgumentException("Private IPv6 addresses are not allowed for OpenAPI URLs.");
             }
+
+            var bytes = address.GetAddressBytes();
+            if ((bytes[0] & 0xFE) == 0xFC)
+            {
+                throw new ArgumentException("Unique local IPv6 addresses are not allowed for OpenAPI URLs.");
+            }
+
+            return;
         }
 
-        return candidates;
+        var octets = address.GetAddressBytes();
+        var first = octets[0];
+        var second = octets[1];
+
+        var isPrivate =
+            first == 10 ||
+            (first == 172 && second >= 16 && second <= 31) ||
+            (first == 192 && second == 168) ||
+            (first == 169 && second == 254) ||
+            first == 127 ||
+            first == 0;
+
+        if (isPrivate)
+        {
+            throw new ArgumentException("Private IP addresses are not allowed for OpenAPI URLs.");
+        }
     }
 
     private static OpenApiDocument Parse(string content)

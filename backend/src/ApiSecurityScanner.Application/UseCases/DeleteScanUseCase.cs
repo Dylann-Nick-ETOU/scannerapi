@@ -4,9 +4,9 @@ namespace ApiSecurityScanner.Application.UseCases;
 
 public class DeleteScanUseCase(IScanRepository scanRepository)
 {
-    public async Task<bool> ExecuteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<bool> ExecuteAsync(Guid id, string ownerId, CancellationToken cancellationToken = default)
     {
-        var scan = await scanRepository.GetByIdAsync(id, cancellationToken);
+        var scan = await scanRepository.GetByIdForOwnerAsync(id, ownerId, cancellationToken);
         if (scan is null)
         {
             return false;

@@ -1,14 +1,17 @@
 using System.Text;
 using System.Text.Json;
+using System.Security.Claims;
 using ApiSecurityScanner.Application.DTOs;
 using ApiSecurityScanner.Application.UseCases;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace ApiSecurityScanner.API.Controllers;
 
 [Authorize]
+[EnableRateLimiting("ScanRequests")]
 [ApiController]
 [Route("api/[controller]")]
 public class ScansController(
@@ -24,6 +27,7 @@ public class ScansController(
     [HttpPost("url")]
     public async Task<ActionResult<ScanReportDto>> ScanFromUrl([FromBody] ScanRequestDto request, CancellationToken cancellationToken)
     {
+        var ownerId = GetCurrentOwnerId();
         var validation = await validator.ValidateAsync(request, cancellationToken);
         if (!validation.IsValid)
         {
@@ -34,7 +38,7 @@ public class ScansController(
             });
         }
 
-        var report = await scanOpenApiUseCase.ExecuteAsync(request, cancellationToken);
+        var report = await scanOpenApiUseCase.ExecuteAsync(request, ownerId, cancellationToken);
         return Ok(report);
     }
 
@@ -42,6 +46,7 @@ public class ScansController(
     [Consumes("multipart/form-data")]
     public async Task<ActionResult<ScanReportDto>> ScanFromFile([FromForm] ScanFileUploadRequest request, CancellationToken cancellationToken)
     {
+        var ownerId = GetCurrentOwnerId();
         if (request.File is null || request.File.Length == 0)
         {
             return BadRequest(new { message = "File is required." });
@@ -68,7 +73,7 @@ public class ScansController(
                 ? Path.GetFileNameWithoutExtension(request.File.FileName)
                 : request.TargetName,
             FileContent = content
-        }, cancellationToken);
+        }, ownerId, cancellationToken);
 
         return Ok(report);
     }
@@ -76,14 +81,14 @@ public class ScansController(
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ScanHistoryItemDto>>> GetAllScans(CancellationToken cancellationToken)
     {
-        var scans = await getAllScansUseCase.ExecuteAsync(cancellationToken);
+        var scans = await getAllScansUseCase.ExecuteAsync(GetCurrentOwnerId(), cancellationToken);
         return Ok(scans);
     }
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ScanReportDto>> GetScanById(Guid id, CancellationToken cancellationToken)
     {
-        var report = await getScanByIdUseCase.ExecuteAsync(id, cancellationToken);
+        var report = await getScanByIdUseCase.ExecuteAsync(id, GetCurrentOwnerId(), cancellationToken);
         if (report is null)
         {
             return NotFound(new { message = "Scan not found." });
@@ -95,7 +100,7 @@ public class ScansController(
     [HttpGet("{id:guid}/export")]
     public async Task<IActionResult> ExportScan(Guid id, CancellationToken cancellationToken)
     {
-        var report = await getScanByIdUseCase.ExecuteAsync(id, cancellationToken);
+        var report = await getScanByIdUseCase.ExecuteAsync(id, GetCurrentOwnerId(), cancellationToken);
         if (report is null)
         {
             return NotFound(new { message = "Scan not found." });
@@ -107,14 +112,26 @@ public class ScansController(
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "ScanDelete")]
     public async Task<IActionResult> DeleteScan(Guid id, CancellationToken cancellationToken)
     {
-        var deleted = await deleteScanUseCase.ExecuteAsync(id, cancellationToken);
+        var deleted = await deleteScanUseCase.ExecuteAsync(id, GetCurrentOwnerId(), cancellationToken);
         if (!deleted)
         {
             return NotFound(new { message = "Scan not found." });
         }
 
         return NoContent();
+    }
+
+    private string GetCurrentOwnerId()
+    {
+        var ownerId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (string.IsNullOrWhiteSpace(ownerId))
+        {
+            throw new UnauthorizedAccessException("Missing subject claim.");
+        }
+
+        return ownerId;
     }
 }
