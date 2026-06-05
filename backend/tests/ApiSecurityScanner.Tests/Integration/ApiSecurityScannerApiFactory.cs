@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -16,6 +17,18 @@ public class ApiSecurityScannerApiFactory : WebApplicationFactory<Program>, IAsy
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.ConfigureAppConfiguration((_, configBuilder) =>
+        {
+            configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Authentication:SeedUsers:0:Username"] = "admin",
+                ["Authentication:SeedUsers:0:PasswordHash"] = "AQAAAAIAAYagAAAAEEhwfBl6N3zNjZ5yjmS45k2Llnt0qUfJxFKZ7JnKFFV7lacRM0LhCpXmIx6WoAQJZA==",
+                ["Authentication:SeedUsers:0:Role"] = "Admin",
+                ["Authentication:SeedUsers:1:Username"] = "auditor",
+                ["Authentication:SeedUsers:1:PasswordHash"] = "AQAAAAIAAYagAAAAELjZ0pm7oMsDdOQKv66LZUKKAGaZnTZLEUlmyHeoiKvyK0nAkZRomsCaBzX4fU8czg==",
+                ["Authentication:SeedUsers:1:Role"] = "User"
+            });
+        });
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<DbContextOptions<ApiSecurityScannerDbContext>>();
