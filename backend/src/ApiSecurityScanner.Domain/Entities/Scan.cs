@@ -5,6 +5,7 @@ namespace ApiSecurityScanner.Domain.Entities;
 public class Scan
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public string OwnerId { get; set; } = string.Empty;
     public string TargetName { get; set; } = string.Empty;
     public string? OpenApiUrl { get; set; }
     public int Score { get; set; }

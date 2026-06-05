@@ -12,15 +12,17 @@ public class ScanOpenApiFileUseCase(
     ScanScoringService scoringService,
     IScanRepository scanRepository)
 {
-    public async Task<ScanReportDto> ExecuteAsync(ScanFileRequestDto request, CancellationToken cancellationToken = default)
+    public async Task<ScanReportDto> ExecuteAsync(ScanFileRequestDto request, string ownerId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.FileContent);
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
 
         var document = documentLoader.LoadFromText(request.FileContent);
         var issues = ruleEngine.Analyze(document).ToList();
 
         var scan = new Scan
         {
+            OwnerId = ownerId,
             TargetName = request.TargetName ?? "uploaded-openapi-file",
             OpenApiUrl = null,
             Status = ScanStatus.Completed,

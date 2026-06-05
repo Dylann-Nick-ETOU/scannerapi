@@ -1,5 +1,24 @@
 export type Severity = 'Low' | 'Medium' | 'High' | 'Critical'
 
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
+export interface RegisterRequest {
+  username: string
+  password: string
+  confirmPassword: string
+}
+
+export interface AuthResponse {
+  accessToken: string
+  tokenType: string
+  expiresIn: number
+  username: string
+  role: string
+}
+
 export interface ScanRequest {
   targetName?: string
   openApiUrl: string
@@ -38,4 +57,25 @@ export interface ScanHistoryItem {
   status: string
   createdAt: string
   issuesCount: number
+}
+
+export interface AdminUserScanItem {
+  id: string
+  targetName: string
+  openApiUrl?: string | null
+  score: number
+  status: string
+  createdAt: string
+  issuesCount: number
+}
+
+export interface AdminUserActivity {
+  username: string
+  role: string
+  isActive: boolean
+  createdAt: string
+  lastLoginAt?: string | null
+  scansCount: number
+  lastScanAt?: string | null
+  scans: AdminUserScanItem[]
 }

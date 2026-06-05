@@ -5,9 +5,9 @@ namespace ApiSecurityScanner.Application.UseCases;
 
 public class GetAllScansUseCase(IScanRepository scanRepository)
 {
-    public async Task<IReadOnlyList<ScanHistoryItemDto>> ExecuteAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ScanHistoryItemDto>> ExecuteAsync(string ownerId, CancellationToken cancellationToken = default)
     {
-        var scans = await scanRepository.GetAllWithIssuesAsync(cancellationToken);
+        var scans = await scanRepository.GetAllWithIssuesForOwnerAsync(ownerId, cancellationToken);
 
         return scans.Select(scan => new ScanHistoryItemDto
         {

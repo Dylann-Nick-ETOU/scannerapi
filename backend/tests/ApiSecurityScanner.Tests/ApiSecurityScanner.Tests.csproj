@@ -10,6 +10,8 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="FluentAssertions" Version="6.12.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.8" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Moq" Version="4.20.70" />
     <PackageReference Include="xunit" Version="2.9.3" />
@@ -21,8 +23,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\ApiSecurityScanner.API\ApiSecurityScanner.API.csproj" />
     <ProjectReference Include="..\..\src\ApiSecurityScanner.Application\ApiSecurityScanner.Application.csproj" />
     <ProjectReference Include="..\..\src\ApiSecurityScanner.Domain\ApiSecurityScanner.Domain.csproj" />
+    <ProjectReference Include="..\..\src\ApiSecurityScanner.Infrastructure\ApiSecurityScanner.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

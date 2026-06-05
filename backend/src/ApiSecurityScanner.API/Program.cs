@@ -1,6 +1,9 @@
 using System.Text;
+using System.Threading.RateLimiting;
+using ApiSecurityScanner.API.Authentication;
 using ApiSecurityScanner.API.Middlewares;
 using ApiSecurityScanner.Application;
+using ApiSecurityScanner.Domain.Entities;
 using ApiSecurityScanner.Infrastructure;
 using ApiSecurityScanner.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -25,6 +28,8 @@ Log.Logger = new LoggerConfiguration()
 builder.Host.UseSerilog();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Authentication"));
+builder.Services.AddSingleton<Microsoft.AspNetCore.Identity.PasswordHasher<string>>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
@@ -49,7 +54,34 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("ScanDelete", policy => policy.RequireRole("Admin"));
+});
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("ScanRequests", context =>
+    {
+        var partitionKey = context.User.Identity?.IsAuthenticated == true
+            ? context.User.FindFirst("sub")?.Value
+                ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? context.User.Identity?.Name
+                ?? context.Connection.RemoteIpAddress?.ToString()
+                ?? "anonymous"
+            : context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+    });
+});
 
 builder.Services.AddSwaggerGen(c =>
 {
@@ -89,7 +121,15 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
-        policy.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin();
+        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        policy.AllowAnyHeader().AllowAnyMethod();
+
+        if (allowedOrigins.Length == 0)
+        {
+            return;
+        }
+
+        policy.WithOrigins(allowedOrigins);
     });
 });
 
@@ -98,22 +138,32 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApiSecurityScannerDbContext>();
+    var authOptions = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<AuthOptions>>();
     Microsoft.Extensions.Logging.ILogger logger =
         scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseMigration");
 
     try
     {
-        var hasMigrations = db.Database.GetMigrations().Any();
-
-        if (hasMigrations)
+        if (db.Database.IsNpgsql())
         {
-            db.Database.Migrate();
+            var hasMigrations = db.Database.GetMigrations().Any();
+
+            if (hasMigrations)
+            {
+                db.Database.Migrate();
+            }
+            else
+            {
+                logger.LogWarning("No EF Core migrations were found. Falling back to direct schema bootstrap.");
+                EnsureApplicationSchema(db, logger);
+            }
         }
         else
         {
-            logger.LogWarning("No EF Core migrations were found. Falling back to direct schema bootstrap.");
-            EnsureApplicationSchema(db, logger);
+            db.Database.EnsureCreated();
         }
+
+        await EnsureSeedUsersAsync(db, authOptions.Value, logger);
     }
     catch (Exception ex)
     {
@@ -125,6 +175,7 @@ using (var scope = app.Services.CreateScope())
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseForwardedHeaders();
 app.UseCors("Frontend");
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
@@ -156,6 +207,9 @@ static void EnsureApplicationSchema(
     {
         if (ApplicationTablesExist(connection))
         {
+            EnsureScanOwnerColumn(connection, logger);
+            EnsureUserTable(connection, logger);
+            EnsureUserColumns(connection, logger);
             logger.LogInformation("Application tables already exist.");
             return;
         }
@@ -172,6 +226,36 @@ static void EnsureApplicationSchema(
     }
 }
 
+static async Task EnsureSeedUsersAsync(
+    ApiSecurityScannerDbContext db,
+    AuthOptions authOptions,
+    Microsoft.Extensions.Logging.ILogger logger)
+{
+    if (authOptions.SeedUsers.Count == 0)
+    {
+        return;
+    }
+
+    foreach (var seedUser in authOptions.SeedUsers)
+    {
+        var exists = await db.AppUsers.AnyAsync(x => x.Username.ToLower() == seedUser.Username.ToLower());
+        if (exists)
+        {
+            continue;
+        }
+
+        db.AppUsers.Add(new AppUser
+        {
+            Username = seedUser.Username,
+            PasswordHash = seedUser.PasswordHash,
+            Role = seedUser.Role
+        });
+        logger.LogInformation("Seeded auth user {Username}.", seedUser.Username);
+    }
+
+    await db.SaveChangesAsync();
+}
+
 static bool ApplicationTablesExist(NpgsqlConnection connection)
 {
     using var command = connection.CreateCommand();
@@ -185,3 +269,64 @@ static bool ApplicationTablesExist(NpgsqlConnection connection)
     var count = (long)(command.ExecuteScalar() ?? 0L);
     return count == 2;
 }
+
+static void EnsureUserTable(NpgsqlConnection connection, Microsoft.Extensions.Logging.ILogger logger)
+{
+    using var command = connection.CreateCommand();
+    command.CommandText = """
+        CREATE TABLE IF NOT EXISTS "AppUsers" (
+            "Id" uuid NOT NULL,
+            "Username" character varying(100) NOT NULL,
+            "PasswordHash" character varying(500) NOT NULL,
+            "Role" character varying(50) NOT NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            CONSTRAINT "PK_AppUsers" PRIMARY KEY ("Id")
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS "IX_AppUsers_Username" ON "AppUsers" ("Username");
+        """;
+    command.ExecuteNonQuery();
+    logger.LogInformation("Ensured AppUsers table exists.");
+}
+
+static void EnsureUserColumns(NpgsqlConnection connection, Microsoft.Extensions.Logging.ILogger logger)
+{
+    using var command = connection.CreateCommand();
+    command.CommandText = """
+        ALTER TABLE "AppUsers"
+        ADD COLUMN IF NOT EXISTS "IsActive" boolean NOT NULL DEFAULT TRUE;
+        ALTER TABLE "AppUsers"
+        ADD COLUMN IF NOT EXISTS "LastLoginAt" timestamp with time zone NULL;
+        """;
+    command.ExecuteNonQuery();
+    logger.LogInformation("Ensured AppUsers security columns exist.");
+}
+
+static void EnsureScanOwnerColumn(NpgsqlConnection connection, Microsoft.Extensions.Logging.ILogger logger)
+{
+    using var checkCommand = connection.CreateCommand();
+    checkCommand.CommandText = """
+        SELECT COUNT(*)
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'Scans'
+          AND column_name = 'OwnerId';
+        """;
+
+    var columnExists = (long)(checkCommand.ExecuteScalar() ?? 0L) == 1;
+    if (columnExists)
+    {
+        return;
+    }
+
+    logger.LogWarning("Column Scans.OwnerId was not found. Applying compatibility schema update.");
+
+    using var alterCommand = connection.CreateCommand();
+    alterCommand.CommandText = """
+        ALTER TABLE "Scans"
+        ADD COLUMN "OwnerId" character varying(200) NOT NULL DEFAULT 'legacy-user';
+        CREATE INDEX IF NOT EXISTS "IX_Scans_OwnerId_CreatedAt" ON "Scans" ("OwnerId", "CreatedAt");
+        """;
+    alterCommand.ExecuteNonQuery();
+}
+
+public partial class Program;

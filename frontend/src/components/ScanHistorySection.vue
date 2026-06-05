@@ -11,6 +11,7 @@
     </div>
 
     <p v-if="loading" class="text-cyan-200/80">Chargement...</p>
+    <p v-else-if="error" class="text-sm text-critical">{{ error }}</p>
     <p v-else-if="items.length === 0" class="text-cyan-200/70">Aucun scan enregistré.</p>
 
     <div v-else class="overflow-x-auto">
@@ -67,6 +68,7 @@ import type { ScanHistoryItem } from '../types/scan'
 defineProps<{
   items: ScanHistoryItem[]
   loading: boolean
+  error?: string
 }>()
 
 defineEmits<{

@@ -34,7 +34,8 @@ pipeline {
       steps {
         withCredentials([
           string(credentialsId: 'api-security-scanner-db-password', variable: 'POSTGRES_PASSWORD'),
-          string(credentialsId: 'api-security-scanner-jwt-signing-key', variable: 'JWT_SIGNING_KEY')
+          string(credentialsId: 'api-security-scanner-jwt-signing-key', variable: 'JWT_SIGNING_KEY'),
+          string(credentialsId: 'api-security-scanner-admin-password-hash', variable: 'ADMIN_PASSWORD_HASH')
         ]) {
           sh '''
             cat > "$DEPLOY_ENV_FILE" <<EOF
@@ -45,7 +46,10 @@ POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 JWT_ISSUER=ApiSecurityScanner
 JWT_AUDIENCE=ApiSecurityScanner.Frontend
 JWT_SIGNING_KEY=$JWT_SIGNING_KEY
-JWT_ALLOW_TOKEN_BOOTSTRAP_IN_PRODUCTION=true
+JWT_ALLOW_TOKEN_BOOTSTRAP_IN_PRODUCTION=false
+ADMIN_USERNAME=Gayan
+ADMIN_PASSWORD_HASH=$ADMIN_PASSWORD_HASH
+ADMIN_ROLE=Admin
 VITE_API_BASE_URL=/api
 EOF
 
