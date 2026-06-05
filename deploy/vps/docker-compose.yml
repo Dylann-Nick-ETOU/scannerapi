@@ -27,6 +27,9 @@ services:
       Jwt__Audience: ${JWT_AUDIENCE:-ApiSecurityScanner.Frontend}
       Jwt__SigningKey: ${JWT_SIGNING_KEY}
       Jwt__AllowTokenBootstrapInProduction: ${JWT_ALLOW_TOKEN_BOOTSTRAP_IN_PRODUCTION:-false}
+      Authentication__SeedUsers__0__Username: ${ADMIN_USERNAME}
+      Authentication__SeedUsers__0__PasswordHash: ${ADMIN_PASSWORD_HASH}
+      Authentication__SeedUsers__0__Role: ${ADMIN_ROLE:-Admin}
     expose:
       - "8080"
     networks:
