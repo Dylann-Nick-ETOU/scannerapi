@@ -10,6 +10,8 @@ namespace ApiSecurityScanner.Infrastructure.OpenApi;
 
 public class OpenApiDocumentLoader(HttpClient httpClient) : IOpenApiDocumentLoader
 {
+    private static readonly Regex ValidComponentKeyPattern = new("^[a-zA-Z0-9\\.\\-_]+$", RegexOptions.Compiled);
+
     public async Task<OpenApiDocument> LoadFromUrlAsync(string url, CancellationToken cancellationToken = default)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
@@ -28,6 +30,7 @@ public class OpenApiDocumentLoader(HttpClient httpClient) : IOpenApiDocumentLoad
         response.EnsureSuccessStatusCode();
 
         var content = await response.Content.ReadAsStringAsync(cancellationToken);
+        await EnsureNotSwaggerUiHtmlAsync(uri, response, content, cancellationToken);
         return Parse(content);
     }
 
@@ -139,6 +142,100 @@ public class OpenApiDocumentLoader(HttpClient httpClient) : IOpenApiDocumentLoad
         return document;
     }
 
+    private async Task EnsureNotSwaggerUiHtmlAsync(
+        Uri requestUri,
+        HttpResponseMessage response,
+        string content,
+        CancellationToken cancellationToken)
+    {
+        var mediaType = response.Content.Headers.ContentType?.MediaType ?? string.Empty;
+        var isHtml =
+            mediaType.Contains("text/html", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("<html", StringComparison.OrdinalIgnoreCase);
+
+        if (!isHtml)
+        {
+            return;
+        }
+
+        var looksLikeSwaggerUi =
+            content.Contains("Swagger UI", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("swagger-ui", StringComparison.OrdinalIgnoreCase);
+
+        if (!looksLikeSwaggerUi)
+        {
+            throw new ArgumentException(
+                $"The URL '{requestUri}' returns HTML, not an OpenAPI JSON/YAML document. Provide the direct OpenAPI specification URL instead.");
+        }
+
+        var suggestions = await TryGetSwaggerUiSuggestionsAsync(requestUri, cancellationToken);
+        if (suggestions.Count == 0)
+        {
+            throw new ArgumentException(
+                $"The URL '{requestUri}' points to Swagger UI HTML, not to an OpenAPI JSON/YAML document. Use the direct specification URL instead.");
+        }
+
+        throw new ArgumentException(
+            $"The URL '{requestUri}' points to Swagger UI HTML, not to an OpenAPI JSON/YAML document. Try one of these specification URLs: {string.Join(", ", suggestions)}");
+    }
+
+    private async Task<List<string>> TryGetSwaggerUiSuggestionsAsync(Uri requestUri, CancellationToken cancellationToken)
+    {
+        var indexJsUri = new Uri(requestUri, "index.js");
+        try
+        {
+            using var response = await httpClient.GetAsync(indexJsUri, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return [];
+            }
+
+            var script = await response.Content.ReadAsStringAsync(cancellationToken);
+            return ExtractSwaggerDocUrls(script, requestUri);
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private static List<string> ExtractSwaggerDocUrls(string script, Uri requestUri)
+    {
+        var results = new List<string>();
+        var matches = Regex.Matches(script, "\"url\"\\s*:\\s*\"(?<url>[^\"]+)\"", RegexOptions.IgnoreCase);
+
+        foreach (Match match in matches)
+        {
+            var raw = match.Groups["url"].Value;
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                continue;
+            }
+
+            Uri? resolved = null;
+            if (raw.StartsWith("/", StringComparison.Ordinal))
+            {
+                resolved = new UriBuilder(requestUri.Scheme, requestUri.Host, requestUri.IsDefaultPort ? -1 : requestUri.Port, raw).Uri;
+            }
+            else if (Uri.TryCreate(raw, UriKind.Absolute, out var absolute))
+            {
+                resolved = absolute;
+            }
+            else
+            {
+                resolved = new Uri(requestUri, raw);
+            }
+
+            var value = resolved.ToString();
+            if (!results.Contains(value, StringComparer.OrdinalIgnoreCase))
+            {
+                results.Add(value);
+            }
+        }
+
+        return results;
+    }
+
     private static string NormalizeOpenApi(string content)
     {
         // Keep YAML or unknown payloads untouched.
@@ -157,10 +254,12 @@ public class OpenApiDocumentLoader(HttpClient httpClient) : IOpenApiDocumentLoad
             return NormalizeOpenApiVersionString(content);
         }
 
+        NormalizeComponentSchemaKeys(obj);
+
         var version = obj["openapi"]?.GetValue<string>() ?? string.Empty;
         if (!version.StartsWith("3.1", StringComparison.OrdinalIgnoreCase))
         {
-            return content;
+            return obj.ToJsonString();
         }
 
         // Downgrade declared version for parser compatibility.
@@ -169,6 +268,96 @@ public class OpenApiDocumentLoader(HttpClient httpClient) : IOpenApiDocumentLoad
         NormalizeTypeArrays(obj);
 
         return obj.ToJsonString();
+    }
+
+    private static void NormalizeComponentSchemaKeys(JsonObject root)
+    {
+        if (root["components"] is not JsonObject components || components["schemas"] is not JsonObject schemas)
+        {
+            return;
+        }
+
+        var renames = new Dictionary<string, string>(StringComparer.Ordinal);
+        var reserved = new HashSet<string>(schemas.Select(x => x.Key), StringComparer.Ordinal);
+
+        foreach (var (key, _) in schemas)
+        {
+            if (ValidComponentKeyPattern.IsMatch(key))
+            {
+                continue;
+            }
+
+            var sanitized = SanitizeComponentKey(key);
+            var unique = sanitized;
+            var suffix = 1;
+
+            while (reserved.Contains(unique))
+            {
+                unique = $"{sanitized}_{suffix++}";
+            }
+
+            reserved.Add(unique);
+            renames[key] = unique;
+        }
+
+        if (renames.Count == 0)
+        {
+            return;
+        }
+
+        var normalizedSchemas = new JsonObject();
+        foreach (var (key, value) in schemas)
+        {
+            var targetKey = renames.TryGetValue(key, out var renamed) ? renamed : key;
+            normalizedSchemas[targetKey] = value?.DeepClone();
+        }
+
+        components["schemas"] = normalizedSchemas;
+        RewriteSchemaReferences(root, renames);
+    }
+
+    private static string SanitizeComponentKey(string key)
+    {
+        var sanitized = Regex.Replace(key, "[^a-zA-Z0-9\\.\\-_]", "_");
+        sanitized = Regex.Replace(sanitized, "_{2,}", "_").Trim('_');
+
+        return string.IsNullOrWhiteSpace(sanitized) ? "Schema" : sanitized;
+    }
+
+    private static void RewriteSchemaReferences(JsonNode? node, IReadOnlyDictionary<string, string> renames)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+            {
+                if (obj["$ref"] is JsonValue refValue &&
+                    refValue.TryGetValue<string>(out var reference) &&
+                    reference.StartsWith("#/components/schemas/", StringComparison.Ordinal))
+                {
+                    var key = reference["#/components/schemas/".Length..];
+                    if (renames.TryGetValue(key, out var renamed))
+                    {
+                        obj["$ref"] = $"#/components/schemas/{renamed}";
+                    }
+                }
+
+                foreach (var (_, child) in obj)
+                {
+                    RewriteSchemaReferences(child, renames);
+                }
+
+                break;
+            }
+            case JsonArray arr:
+            {
+                foreach (var child in arr)
+                {
+                    RewriteSchemaReferences(child, renames);
+                }
+
+                break;
+            }
+        }
     }
 
     private static void NormalizeTypeArrays(JsonNode? node)
