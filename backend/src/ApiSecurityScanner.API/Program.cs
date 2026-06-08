@@ -307,7 +307,11 @@ static void EnsureSecurityIssueColumns(NpgsqlConnection connection, Microsoft.Ex
     using var command = connection.CreateCommand();
     command.CommandText = """
         ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "DetectionConfidence" character varying(20) NOT NULL DEFAULT '';
+        ALTER TABLE "SecurityIssues"
         ADD COLUMN IF NOT EXISTS "OpenApiLocation" character varying(1200) NOT NULL DEFAULT '';
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "OpenApiExcerpt" character varying(4000) NOT NULL DEFAULT '';
         ALTER TABLE "SecurityIssues"
         ADD COLUMN IF NOT EXISTS "OwaspTop10Id" character varying(20) NOT NULL DEFAULT '';
         ALTER TABLE "SecurityIssues"

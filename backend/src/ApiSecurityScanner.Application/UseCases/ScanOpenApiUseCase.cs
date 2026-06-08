@@ -54,8 +54,10 @@ public class ScanOpenApiUseCase(
             {
                 RuleCode = x.RuleCode,
                 Severity = x.Severity.ToString(),
+                DetectionConfidence = x.DetectionConfidence,
                 Endpoint = x.Endpoint,
                 OpenApiLocation = x.OpenApiLocation,
+                OpenApiExcerpt = x.OpenApiExcerpt,
                 Title = x.Title,
                 Description = x.Description,
                 Recommendation = x.Recommendation,

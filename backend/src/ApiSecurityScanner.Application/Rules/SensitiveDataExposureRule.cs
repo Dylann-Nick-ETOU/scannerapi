@@ -70,8 +70,10 @@ public class SensitiveDataExposureRule : ISecurityRule
                             {
                                 RuleCode = RuleCode,
                                 Severity = SeverityLevel.Critical,
+                                DetectionConfidence = DetectionConfidenceLevels.High,
                                 Endpoint = $"{operation.Key} {path}",
                                 OpenApiLocation = field.Pointer,
+                                OpenApiExcerpt = OpenApiExcerptFormatter.ForSchema(field.FieldPath, field.Schema),
                                 Title = "Champ sensible exposé",
                                 Description = $"Le champ sensible '{field.FieldPath}' est présent dans un schéma de réponse.",
                                 Recommendation = "Ne jamais exposer ces champs dans les DTO de sortie.",
@@ -114,7 +116,7 @@ public class SensitiveDataExposureRule : ISecurityRule
 
             if (SensitiveFields.Contains(property.Key, StringComparer.OrdinalIgnoreCase))
             {
-                found.Add(new SensitiveFieldMatch(propertyPath, propertyPointer));
+                found.Add(new SensitiveFieldMatch(propertyPath, propertyPointer, property.Value));
             }
 
             foreach (var nested in FindSensitiveFields(property.Value, propertyPath, propertyPointer, visitedRefs))
@@ -153,5 +155,5 @@ public class SensitiveDataExposureRule : ISecurityRule
         return found;
     }
 
-    private sealed record SensitiveFieldMatch(string FieldPath, string Pointer);
+    private sealed record SensitiveFieldMatch(string FieldPath, string Pointer, OpenApiSchema Schema);
 }

@@ -79,8 +79,10 @@ public class MassAssignmentRule : ISecurityRule
                     {
                         RuleCode = RuleCode,
                         Severity = SeverityLevel.High,
+                        DetectionConfidence = DetectionConfidenceLevels.Medium,
                         Endpoint = endpoint,
                         OpenApiLocation = fieldPath.Pointer,
+                        OpenApiExcerpt = OpenApiExcerptFormatter.ForSchema(fieldPath.FieldPath, fieldPath.Schema),
                         Title = "Champ sensible assignable par le client",
                         Description = $"Le champ '{fieldPath.FieldPath}' est accessible dans un schéma de requête et peut favoriser une faille de mass assignment.",
                         Recommendation = "Séparer les DTO d'entrée, marquer les champs internes en readOnly et filtrer explicitement les propriétés autorisées côté serveur.",
@@ -126,7 +128,7 @@ public class MassAssignmentRule : ISecurityRule
 
             if (property.Value.ReadOnly != true && IsSensitiveWritableField(property.Key))
             {
-                found.Add(new SensitiveWritableFieldMatch(propertyPath, propertyPointer));
+                found.Add(new SensitiveWritableFieldMatch(propertyPath, propertyPointer, property.Value));
             }
 
             foreach (var nested in FindSensitiveWritableFields(property.Value, propertyPath, propertyPointer, visitedRefs))
@@ -183,5 +185,5 @@ public class MassAssignmentRule : ISecurityRule
             .Replace("-", string.Empty, StringComparison.Ordinal)
             .Trim();
 
-    private sealed record SensitiveWritableFieldMatch(string FieldPath, string Pointer);
+    private sealed record SensitiveWritableFieldMatch(string FieldPath, string Pointer, OpenApiSchema Schema);
 }

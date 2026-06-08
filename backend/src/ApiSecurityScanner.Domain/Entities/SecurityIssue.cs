@@ -8,8 +8,10 @@ public class SecurityIssue
     public Guid ScanId { get; set; }
     public string RuleCode { get; set; } = string.Empty;
     public SeverityLevel Severity { get; set; }
+    public string DetectionConfidence { get; set; } = string.Empty;
     public string Endpoint { get; set; } = string.Empty;
     public string OpenApiLocation { get; set; } = string.Empty;
+    public string OpenApiExcerpt { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string Recommendation { get; set; } = string.Empty;

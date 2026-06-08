@@ -65,7 +65,7 @@
       </div>
     </header>
 
-    <div class="mx-auto flex w-full max-w-[1280px] flex-col gap-10 px-6 pb-14 pt-16 md:px-10 md:pt-20">
+    <div class="mx-auto flex w-full flex-col gap-10 px-6 pb-14 pt-16 md:px-10 md:pt-20" :class="contentWidthClass">
       <Transition name="fade-slide" mode="out-in">
         <section v-if="page === 'accueil'" key="accueil">
           <HeroSection @start="go('scanner')" @demo="go('avant-apres')" />
@@ -179,6 +179,11 @@ const authLoading = ref(false)
 const authState = ref<AuthResponse | null>(readStoredAuthState())
 const authIdentityLabel = computed(() =>
   authState.value ? `${authState.value.username} (${authState.value.role})` : 'Non connecté'
+)
+const contentWidthClass = computed(() =>
+  page.value === 'rapport' || page.value === 'admin' || page.value === 'recommandations'
+    ? 'max-w-[1460px]'
+    : 'max-w-[1280px]'
 )
 
 function go(target: Page) {

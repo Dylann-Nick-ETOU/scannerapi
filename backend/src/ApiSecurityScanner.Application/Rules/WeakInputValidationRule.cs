@@ -25,15 +25,17 @@ public class WeakInputValidationRule : ISecurityRule
             foreach (var operation in pathItem.Operations)
             {
                 var endpoint = $"{operation.Key} {path}";
-                var weakRequestBodyLocation = FindWeakRequestBodyLocation(path, operation.Key, operation.Value);
-                if (weakRequestBodyLocation is not null)
+                var weakRequestBodyMatch = FindWeakRequestBodyMatch(path, operation.Key, operation.Value);
+                if (weakRequestBodyMatch is not null)
                 {
                     issues.Add(new SecurityIssue
                     {
                         RuleCode = RuleCodeValue,
                         Severity = SeverityLevel.Medium,
+                        DetectionConfidence = DetectionConfidenceLevels.Medium,
                         Endpoint = endpoint,
-                        OpenApiLocation = weakRequestBodyLocation,
+                        OpenApiLocation = weakRequestBodyMatch.Pointer,
+                        OpenApiExcerpt = OpenApiExcerptFormatter.ForSchema(weakRequestBodyMatch.FieldPath, weakRequestBodyMatch.Schema),
                         Title = "Validation d'entrée insuffisante",
                         Description = "Les schémas de requête ne définissent pas assez de contraintes de validation (required, min/max, format, pattern).",
                         Recommendation = "Ajouter une validation stricte avec FluentValidation.",
@@ -48,7 +50,7 @@ public class WeakInputValidationRule : ISecurityRule
         return issues;
     }
 
-    private static string? FindWeakRequestBodyLocation(string path, OperationType operationType, OpenApiOperation operation)
+    private static WeakSchemaMatch? FindWeakRequestBodyMatch(string path, OperationType operationType, OpenApiOperation operation)
     {
         if (operation.RequestBody?.Content is null)
         {
@@ -71,7 +73,12 @@ public class WeakInputValidationRule : ISecurityRule
                 mediaType.Key,
                 "schema");
 
-            var weakLocation = FindWeakSchemaLocation(schema, pointer, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            var weakLocation = FindWeakSchemaMatch(
+                schema,
+                currentPath: null,
+                pointer,
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
             if (weakLocation is not null)
             {
                 return weakLocation;
@@ -104,8 +111,10 @@ public class WeakInputValidationRule : ISecurityRule
                 {
                     RuleCode = RuleCodeValue,
                     Severity = SeverityLevel.Medium,
+                    DetectionConfidence = DetectionConfidenceLevels.Medium,
                     Endpoint = endpoint,
                     OpenApiLocation = parameter.LocationPointer,
+                    OpenApiExcerpt = OpenApiExcerptFormatter.ForParameter(parameter.Name, locationLabel, parameter.Required, parameter.Schema),
                     Title = $"Paramètre {locationLabel} mal défini",
                     Description = $"Le paramètre '{parameter.Name}' doit être obligatoire et définir des contraintes de validation adaptées.",
                     Recommendation = $"Marquer '{parameter.Name}' comme required et ajouter des contraintes OpenAPI (pattern, enum, min/max, minLength/maxLength).",
@@ -129,8 +138,10 @@ public class WeakInputValidationRule : ISecurityRule
             {
                 RuleCode = RuleCodeValue,
                 Severity = SeverityLevel.Medium,
+                DetectionConfidence = DetectionConfidenceLevels.Medium,
                 Endpoint = endpoint,
                 OpenApiLocation = OpenApiJsonPointer.Append(parameter.LocationPointer, "schema"),
+                OpenApiExcerpt = OpenApiExcerptFormatter.ForParameter(parameter.Name, locationLabel, parameter.Required, parameter.Schema),
                 Title = $"Paramètre {locationLabel} peu contraint",
                 Description = $"Le paramètre '{parameter.Name}' n'expose pas assez de contraintes de validation dans sa définition OpenAPI.",
                 Recommendation = $"Ajouter des contraintes OpenAPI sur '{parameter.Name}' ({locationLabel}) : min/max, minLength/maxLength, pattern, enum, format.",
@@ -174,10 +185,14 @@ public class WeakInputValidationRule : ISecurityRule
             return false;
         }
 
-        return !HasAnySchemaConstraint(schema) || FindWeakSchemaLocation(schema, string.Empty, new HashSet<string>(StringComparer.OrdinalIgnoreCase)) is not null;
+        return !HasAnySchemaConstraint(schema) || FindWeakSchemaMatch(schema, null, string.Empty, new HashSet<string>(StringComparer.OrdinalIgnoreCase)) is not null;
     }
 
-    private static string? FindWeakSchemaLocation(OpenApiSchema schema, string pointer, HashSet<string> visitedRefs)
+    private static WeakSchemaMatch? FindWeakSchemaMatch(
+        OpenApiSchema schema,
+        string? currentPath,
+        string pointer,
+        HashSet<string> visitedRefs)
     {
         if (schema.Reference?.Id is { Length: > 0 } referenceId)
         {
@@ -190,13 +205,14 @@ public class WeakInputValidationRule : ISecurityRule
         foreach (var property in schema.Properties)
         {
             var propertyPointer = OpenApiJsonPointer.Append(pointer, "properties", property.Key);
+            var propertyPath = string.IsNullOrWhiteSpace(currentPath) ? property.Key : $"{currentPath}.{property.Key}";
 
             if (!HasAnySchemaConstraint(property.Value))
             {
-                return propertyPointer;
+                return new WeakSchemaMatch(propertyPath, propertyPointer, property.Value);
             }
 
-            var nestedWeakLocation = FindWeakSchemaLocation(property.Value, propertyPointer, visitedRefs);
+            var nestedWeakLocation = FindWeakSchemaMatch(property.Value, propertyPath, propertyPointer, visitedRefs);
             if (nestedWeakLocation is not null)
             {
                 return nestedWeakLocation;
@@ -205,13 +221,14 @@ public class WeakInputValidationRule : ISecurityRule
 
         if (schema.Type == "object" && schema.Properties.Count > 0 && schema.Required.Count == 0)
         {
-            return pointer;
+            return new WeakSchemaMatch(currentPath, pointer, schema);
         }
 
         if (schema.Items is not null)
         {
-            var itemsWeakLocation = FindWeakSchemaLocation(
+            var itemsWeakLocation = FindWeakSchemaMatch(
                 schema.Items,
+                string.IsNullOrWhiteSpace(currentPath) ? "[]" : $"{currentPath}[]",
                 OpenApiJsonPointer.Append(pointer, "items"),
                 visitedRefs);
 
@@ -230,8 +247,9 @@ public class WeakInputValidationRule : ISecurityRule
         {
             for (var index = 0; index < compositeList.Count; index++)
             {
-                var compositeWeakLocation = FindWeakSchemaLocation(
+                var compositeWeakLocation = FindWeakSchemaMatch(
                     compositeList[index],
+                    currentPath,
                     OpenApiJsonPointer.Append(pointer, segment, index.ToString()),
                     visitedRefs);
 
@@ -271,4 +289,6 @@ public class WeakInputValidationRule : ISecurityRule
         public bool Required => Parameter.Required;
         public OpenApiSchema? Schema => Parameter.Schema;
     }
+
+    private sealed record WeakSchemaMatch(string? FieldPath, string Pointer, OpenApiSchema Schema);
 }

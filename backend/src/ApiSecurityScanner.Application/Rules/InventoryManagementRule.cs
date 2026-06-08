@@ -38,8 +38,10 @@ public partial class InventoryManagementRule : ISecurityRule
                     {
                         RuleCode = RuleCode,
                         Severity = SeverityLevel.Medium,
+                        DetectionConfidence = DetectionConfidenceLevels.High,
                         Endpoint = endpoint,
                         OpenApiLocation = OpenApiJsonPointer.Append(operationLocation, "deprecated"),
+                        OpenApiExcerpt = OpenApiExcerptFormatter.ForDeprecatedOperation(path, operation.Key),
                         Title = "Endpoint obsolète encore exposé",
                         Description = "Cette opération est marquée deprecated dans la spec et reste exposée au catalogue d'API.",
                         Recommendation = "Retirer l'endpoint obsolète ou planifier sa suppression avec une date de fin de support claire.",
@@ -65,8 +67,10 @@ public partial class InventoryManagementRule : ISecurityRule
                 {
                     RuleCode = RuleCode,
                     Severity = SeverityLevel.Medium,
+                    DetectionConfidence = DetectionConfidenceLevels.Medium,
                     Endpoint = endpoint,
                     OpenApiLocation = operationLocation,
+                    OpenApiExcerpt = OpenApiExcerptFormatter.ForVersionedOperation(path, operation.Key, $"v{endpointVersion.Major}", $"v{latestMajorVersion.Value}"),
                     Title = "Ancienne version d'API encore exposée",
                     Description = $"L'endpoint appartient à la version majeure v{endpointVersion.Major} alors que la version la plus récente détectée dans la spec est v{latestMajorVersion.Value}.",
                     Recommendation = "Réduire les versions encore publiées, documenter les versions supportées et supprimer les endpoints hérités non nécessaires.",

@@ -37,8 +37,10 @@ public class InsecureServerUrlRule : ISecurityRule
             {
                 RuleCode = RuleCode,
                 Severity = SeverityLevel.Medium,
+                DetectionConfidence = DetectionConfidenceLevels.High,
                 Endpoint = "Server URL",
                 OpenApiLocation = OpenApiJsonPointer.Create("servers", serverIndex.ToString(), "url"),
+                OpenApiExcerpt = OpenApiExcerptFormatter.ForServer(server, uri.Scheme),
                 Title = "Configuration serveur non sécurisée",
                 Description = $"Le serveur '{server.Url}' utilise HTTP.",
                 Recommendation = "Forcer HTTPS.",

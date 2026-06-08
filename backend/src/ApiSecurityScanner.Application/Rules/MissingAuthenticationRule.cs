@@ -37,8 +37,10 @@ public class MissingAuthenticationRule : ISecurityRule
                 {
                     RuleCode = RuleCode,
                     Severity = SeverityLevel.High,
+                    DetectionConfidence = DetectionConfidenceLevels.High,
                     Endpoint = $"{operation.Key} {path}",
                     OpenApiLocation = location,
+                    OpenApiExcerpt = OpenApiExcerptFormatter.ForOperation(path, operation.Key, hasOperationSecurity, hasGlobalSecurity),
                     Title = "Endpoint sans authentification",
                     Description = "Cet endpoint semble exposé sans mécanisme d'authentification.",
                     Recommendation = "Ajouter JWT/OAuth2.",

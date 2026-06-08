@@ -54,8 +54,10 @@ public class SensitiveEndpointRule : ISecurityRule
                 {
                     RuleCode = RuleCode,
                     Severity = SeverityLevel.High,
+                    DetectionConfidence = DetectionConfidenceLevels.Medium,
                     Endpoint = $"{operation.Key} {path}",
                     OpenApiLocation = location,
+                    OpenApiExcerpt = OpenApiExcerptFormatter.ForOperation(path, operation.Key, hasOperationSecurity, hasGlobalSecurity),
                     Title = "Endpoint sensible sans contrôle d'accès",
                     Description = "Cet endpoint sensible est accessible sans restriction de rôle/policy.",
                     Recommendation = "Ajouter rôles et policies.",

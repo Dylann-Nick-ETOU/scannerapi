@@ -1,4 +1,5 @@
 export type Severity = 'Low' | 'Medium' | 'High' | 'Critical'
+export type DetectionConfidence = 'Low' | 'Medium' | 'High'
 
 export interface LoginRequest {
   username: string
@@ -27,8 +28,10 @@ export interface ScanRequest {
 export interface SecurityIssue {
   ruleCode: string
   severity: Severity
+  detectionConfidence: DetectionConfidence
   endpoint: string
   openApiLocation: string
+  openApiExcerpt: string
   title: string
   description: string
   recommendation: string
