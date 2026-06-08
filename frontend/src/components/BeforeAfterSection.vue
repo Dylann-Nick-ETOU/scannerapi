@@ -1,5 +1,5 @@
 <template>
-  <section class="space-y-6 rounded-2xl border border-cyan-800/70 bg-[#032a45]/85 p-8">
+  <section class="space-y-6 rounded-2xl border border-cyan-800/70 bg-[#032a45]/85 p-10 lg:p-12">
     <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <h3 class="text-2xl font-semibold">Avant / Après</h3>
@@ -186,6 +186,7 @@
             :issues="filteredNewIssues"
             :mode="viewMode"
             accent="critical"
+            :scan-id="comparison.current.scanId"
             :empty-text="emptyText('Aucune nouvelle faille détectée.')"
           />
         </article>
@@ -199,6 +200,7 @@
             :issues="filteredResolvedIssues"
             :mode="viewMode"
             accent="safe"
+            :scan-id="comparison.baseline.scanId"
             :empty-text="emptyText('Aucune faille résolue dans cet intervalle.')"
           />
         </article>
@@ -212,6 +214,7 @@
             :issues="filteredUnchangedIssues"
             :mode="viewMode"
             accent="accent"
+            :scan-id="comparison.current.scanId"
             :empty-text="emptyText('Aucune faille persistante.')"
           />
         </article>
@@ -241,6 +244,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   compare: [currentScanId: string, baselineScanId: string]
+  'open-issue': [scanId: string, issueId: string]
 }>()
 
 const selectedCurrentId = ref(props.currentScanId ?? '')
@@ -382,6 +386,10 @@ const IssueRenderer = defineComponent({
       type: String as PropType<'critical' | 'safe' | 'accent'>,
       required: true
     },
+    scanId: {
+      type: String,
+      required: true
+    },
     emptyText: {
       type: String,
       required: true
@@ -414,7 +422,8 @@ const IssueRenderer = defineComponent({
       }
 
       return h(IssueList, {
-        issues: orderedIssues.value
+        issues: orderedIssues.value,
+        scanId: componentProps.scanId
       })
     }
   }
@@ -425,6 +434,10 @@ const IssueList = defineComponent({
   props: {
     issues: {
       type: Array as PropType<SecurityIssue[]>,
+      required: true
+    },
+    scanId: {
+      type: String,
       required: true
     }
   },
@@ -448,7 +461,15 @@ const IssueList = defineComponent({
             ]),
             issue.openApiLocation
               ? h('p', { class: 'mt-3 font-mono text-xs text-cyan-100/65 break-all' }, issue.openApiLocation)
-              : null
+              : null,
+            h(
+              'button',
+              {
+                class: 'mt-4 inline-flex rounded-lg border border-cyan-700 px-3 py-2 text-xs text-cyan-100 transition hover:border-accent hover:text-accent',
+                onClick: () => emit('open-issue', componentProps.scanId, issue.id)
+              },
+              'Ouvrir dans le rapport'
+            )
           ])
         )
       )

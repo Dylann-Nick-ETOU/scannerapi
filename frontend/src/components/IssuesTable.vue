@@ -1,5 +1,5 @@
 <template>
-  <section class="rounded-2xl border border-cyan-800/70 bg-[#032a45]/85 p-9 lg:p-10">
+  <section class="rounded-2xl border border-cyan-800/70 bg-[#032a45]/85 p-10 lg:p-12">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <h3 class="text-2xl font-semibold">Liste des failles détectées</h3>
@@ -91,7 +91,7 @@
     </p>
 
     <div v-if="viewMode === 'detail'" class="mt-6 overflow-x-auto rounded-2xl border border-cyan-800/70">
-      <table class="w-full min-w-[1520px] text-left text-lg">
+      <table class="w-full min-w-[1720px] text-left text-lg">
         <thead class="bg-[#04314e]">
           <tr class="border-b border-cyan-800 text-cyan-100">
             <th class="px-4 py-4">Sévérité</th>
@@ -108,7 +108,11 @@
         </thead>
         <tbody>
           <template v-for="issue in sortedIssues" :key="issue.id">
-            <tr class="border-b border-cyan-900/70 align-top">
+            <tr
+              :data-issue-id="issue.id"
+              class="border-b border-cyan-900/70 align-top transition-colors"
+              :class="highlightedIssueId === issue.id ? 'bg-accent/10' : ''"
+            >
               <td class="px-4 py-4"><span class="rounded-full border px-3 py-1 text-sm" :class="severityClass(issue.severity)">{{ issue.severity }}</span></td>
               <td class="px-4 py-4"><span class="rounded-full border px-3 py-1 text-sm" :class="confidenceClass(issue.detectionConfidence)">{{ issue.detectionConfidence }}</span></td>
               <td class="px-4 py-4 text-cyan-100/90">
@@ -202,7 +206,7 @@
     </div>
 
     <div v-else-if="viewMode === 'owasp'" class="mt-6 overflow-x-auto rounded-2xl border border-cyan-800/70">
-      <table class="w-full min-w-[1040px] text-left text-lg">
+      <table class="w-full min-w-[1220px] text-left text-lg">
         <thead class="bg-[#04314e]">
           <tr class="border-b border-cyan-800 text-cyan-100">
             <th class="px-4 py-4">Référence OWASP</th>
@@ -230,7 +234,7 @@
     </div>
 
     <div v-else class="mt-6 overflow-x-auto rounded-2xl border border-cyan-800/70">
-      <table class="w-full min-w-[1140px] text-left text-lg">
+      <table class="w-full min-w-[1320px] text-left text-lg">
         <thead class="bg-[#04314e]">
           <tr class="border-b border-cyan-800 text-cyan-100">
             <th class="px-4 py-4">Endpoint</th>
@@ -261,7 +265,7 @@
 
 <script setup lang="ts">
 import axios from 'axios'
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { updateIssueReview } from '../services/scanApi'
 import type { DetectionConfidence, ReviewStatus, SecurityIssue, Severity } from '../types/scan'
 import { groupIssuesByEndpoint, groupIssuesByOwasp, owaspLabel, reviewStatusLabel, sortIssues } from '../utils/issuePresentation'
@@ -269,6 +273,7 @@ import { groupIssuesByEndpoint, groupIssuesByOwasp, owaspLabel, reviewStatusLabe
 const props = defineProps<{
   scanId: string
   issues: SecurityIssue[]
+  focusedIssueId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -285,6 +290,7 @@ const reviewStatusFilter = ref<ReviewStatus | ''>('')
 const reviewDraft = ref<{ issueId: string; status: Exclude<ReviewStatus, 'Open'>; comment: string } | null>(null)
 const savingIssueId = ref<string | null>(null)
 const actionError = ref('')
+const highlightedIssueId = ref<string | null>(null)
 const viewModes = [
   { key: 'detail', label: 'Détail' },
   { key: 'owasp', label: 'Par OWASP' },
@@ -348,6 +354,27 @@ const endpointGroups = computed(() => groupIssuesByEndpoint(filteredIssues.value
 const hasActiveFilters = computed(() =>
   Boolean(searchQuery.value || severityFilter.value || confidenceFilter.value || owaspFilter.value || reviewStatusFilter.value)
 )
+
+watch(() => props.focusedIssueId, async (issueId) => {
+  if (!issueId || !props.issues.some(issue => issue.id === issueId)) {
+    return
+  }
+
+  resetFilters()
+  viewMode.value = 'detail'
+  highlightedIssueId.value = issueId
+
+  await nextTick()
+
+  const row = document.querySelector<HTMLTableRowElement>(`[data-issue-id="${issueId}"]`)
+  row?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+  window.setTimeout(() => {
+    if (highlightedIssueId.value === issueId) {
+      highlightedIssueId.value = null
+    }
+  }, 3200)
+}, { flush: 'post' })
 
 function severityClass(severity: SecurityIssue['severity']): string {
   if (severity === 'Critical') return 'border-critical/50 text-critical bg-critical/10'

@@ -1,7 +1,7 @@
 <template>
   <main class="grid-bg min-h-screen text-white">
     <header class="border-b border-cyan-900/70 bg-[#00213a]/70 backdrop-blur-sm">
-      <div class="mx-auto flex max-w-[1280px] items-center justify-between px-6 py-3 md:px-10">
+      <div class="mx-auto flex max-w-[1560px] items-center justify-between px-6 py-3 md:px-10 xl:px-12">
         <button class="flex items-center gap-3" @click="go('accueil')">
           <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-[#12384e] text-accent">🛡</div>
           <span class="text-2xl font-medium text-cyan-50">API Security Scanner</span>
@@ -50,7 +50,7 @@
         </div>
       </div>
 
-      <div v-if="authState" class="mx-auto max-w-[1280px] px-6 pb-3 md:hidden md:px-10">
+      <div v-if="authState" class="mx-auto max-w-[1560px] px-6 pb-3 md:hidden md:px-10 xl:px-12">
         <nav class="flex gap-2 overflow-x-auto rounded-2xl border border-cyan-800/60 bg-[#03243c]/70 p-1">
           <button
             v-for="item in navItems"
@@ -65,7 +65,7 @@
       </div>
     </header>
 
-    <div class="mx-auto flex w-full flex-col gap-10 px-6 pb-14 pt-16 md:px-10 md:pt-20" :class="contentWidthClass">
+    <div class="mx-auto flex w-full flex-col gap-10 px-6 pb-14 pt-16 md:px-10 md:pt-20 xl:px-12" :class="contentWidthClass">
       <Transition name="fade-slide" mode="out-in">
         <section v-if="page === 'accueil'" key="accueil">
           <HeroSection @start="go('scanner')" @demo="go('avant-apres')" />
@@ -96,6 +96,7 @@
             <IssuesTable
               :scan-id="report.scanId"
               :issues="report.issues"
+              :focused-issue-id="reportFocusedIssueId"
               @issue-updated="handleIssueUpdated"
               @action-error="handleIssueActionError"
             />
@@ -127,6 +128,7 @@
             :current-scan-id="comparisonCurrentScanId"
             :baseline-scan-id="comparisonBaselineScanId"
             @compare="handleCompareScans"
+            @open-issue="handleOpenIssueFromComparison"
           />
         </section>
 
@@ -148,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import axios from 'axios'
 import AdminUsersSection from './components/AdminUsersSection.vue'
 import AuthPage from './components/AuthPage.vue'
@@ -191,6 +193,7 @@ const comparisonLoading = ref(false)
 const comparisonError = ref('')
 const comparisonCurrentScanId = ref('')
 const comparisonBaselineScanId = ref('')
+const reportFocusedIssueId = ref('')
 const adminUsers = ref<AdminUserActivity[]>([])
 const adminLoading = ref(false)
 const adminError = ref('')
@@ -201,8 +204,8 @@ const authIdentityLabel = computed(() =>
 )
 const contentWidthClass = computed(() =>
   page.value === 'rapport' || page.value === 'admin' || page.value === 'recommandations' || page.value === 'avant-apres'
-    ? 'max-w-[1460px]'
-    : 'max-w-[1280px]'
+    ? 'max-w-[1640px]'
+    : 'max-w-[1420px]'
 )
 
 function go(target: Page) {
@@ -264,6 +267,7 @@ function handleLogout() {
   comparisonError.value = ''
   comparisonCurrentScanId.value = ''
   comparisonBaselineScanId.value = ''
+  reportFocusedIssueId.value = ''
   adminUsers.value = []
   error.value = ''
   historyError.value = ''
@@ -316,6 +320,7 @@ async function handleScanUrl(url: string) {
   error.value = ''
   try {
     report.value = await scanFromUrl({ openApiUrl: url })
+    reportFocusedIssueId.value = ''
     await loadHistory()
     page.value = 'rapport'
   } catch (err: unknown) {
@@ -332,6 +337,7 @@ async function handleScanFile(file: File) {
   error.value = ''
   try {
     report.value = await scanFromFile(file)
+    reportFocusedIssueId.value = ''
     await loadHistory()
     page.value = 'rapport'
   } catch (err: unknown) {
@@ -348,6 +354,7 @@ async function handleViewScan(id: string) {
   error.value = ''
   try {
     report.value = await getScanById(id)
+    reportFocusedIssueId.value = ''
     page.value = 'rapport'
   } catch (err) {
     error.value = extractApiError(err, 'Impossible de charger ce rapport.')
@@ -383,6 +390,9 @@ async function handleDeleteScan(id: string) {
       comparisonError.value = ''
       comparisonCurrentScanId.value = ''
       comparisonBaselineScanId.value = ''
+    }
+    if (reportFocusedIssueId.value && report.value?.scanId === id) {
+      reportFocusedIssueId.value = ''
     }
     await loadHistory()
   } catch (err) {
@@ -422,6 +432,28 @@ async function handleCompareScans(currentScanId: string, baselineScanId: string)
     console.error(err)
   } finally {
     comparisonLoading.value = false
+  }
+}
+
+async function handleOpenIssueFromComparison(scanId: string, issueId: string) {
+  loading.value = true
+  error.value = ''
+
+  try {
+    if (report.value?.scanId !== scanId) {
+      report.value = await getScanById(scanId)
+    }
+
+    reportFocusedIssueId.value = ''
+    page.value = 'rapport'
+
+    await nextTick()
+    reportFocusedIssueId.value = issueId
+  } catch (err) {
+    error.value = extractApiError(err, 'Impossible d\'ouvrir ce finding dans le rapport.')
+    console.error(err)
+  } finally {
+    loading.value = false
   }
 }
 
