@@ -91,6 +91,19 @@ export function reviewStatusLabel(status: ReviewStatus): string {
   return 'Ouvert'
 }
 
+export function severityClassName(severity: Severity): string {
+  if (severity === 'Critical') return 'border-critical/50 text-critical bg-critical/10'
+  if (severity === 'High') return 'border-warning/50 text-warning bg-warning/10'
+  if (severity === 'Medium') return 'border-accent/50 text-accent bg-accent/10'
+  return 'border-cyan-500/50 text-cyan-200 bg-cyan-500/10'
+}
+
+export function confidenceClassName(confidence: DetectionConfidence): string {
+  if (confidence === 'High') return 'border-safe/50 text-safe bg-safe/10'
+  if (confidence === 'Medium') return 'border-warning/50 text-warning bg-warning/10'
+  return 'border-cyan-500/50 text-cyan-200 bg-cyan-500/10'
+}
+
 function confidenceAwareSeverityRank(issue: SecurityIssue): number {
   return severityRank(issue.severity) * 10 + confidenceRank(issue.detectionConfidence)
 }

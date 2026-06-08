@@ -96,19 +96,33 @@
         </label>
       </div>
 
-      <div class="flex flex-col gap-3 text-sm text-cyan-100/80 lg:flex-row lg:items-center lg:justify-between">
-        <p>
-          {{ filteredNewIssues.length + filteredResolvedIssues.length + filteredUnchangedIssues.length }}
-          finding(s) affiché(s) sur
-          {{ comparison.summary.newIssuesCount + comparison.summary.resolvedIssuesCount + comparison.summary.unchangedIssuesCount }}
-        </p>
-        <button
-          class="inline-flex h-10 items-center justify-center rounded-xl border border-cyan-700 px-4 text-cyan-100 transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="!hasActiveFilters"
-          @click="resetFilters"
-        >
-          Réinitialiser les filtres
-        </button>
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div class="inline-flex w-full max-w-full gap-1 overflow-x-auto rounded-xl border border-cyan-800/70 bg-[#04314e] p-1 lg:w-auto">
+          <button
+            v-for="mode in viewModes"
+            :key="mode.key"
+            class="shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition"
+            :class="viewMode === mode.key ? 'bg-accent text-night' : 'text-cyan-100/85 hover:bg-cyan-900/40'"
+            @click="viewMode = mode.key"
+          >
+            {{ mode.label }}
+          </button>
+        </div>
+
+        <div class="flex flex-col gap-3 text-sm text-cyan-100/80 lg:flex-row lg:items-center">
+          <p>
+            {{ filteredNewIssues.length + filteredResolvedIssues.length + filteredUnchangedIssues.length }}
+            finding(s) affiché(s) sur
+            {{ comparison.summary.newIssuesCount + comparison.summary.resolvedIssuesCount + comparison.summary.unchangedIssuesCount }}
+          </p>
+          <button
+            class="inline-flex h-10 items-center justify-center rounded-xl border border-cyan-700 px-4 text-cyan-100 transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="!hasActiveFilters"
+            @click="resetFilters"
+          >
+            Réinitialiser les filtres
+          </button>
+        </div>
       </div>
 
       <div class="grid gap-4 lg:grid-cols-4">
@@ -168,7 +182,12 @@
             <h4 class="text-xl font-semibold text-critical">Nouvelles failles</h4>
             <span class="rounded-full border border-critical/40 px-3 py-1 text-sm text-critical">{{ filteredNewIssues.length }} / {{ comparison.summary.newIssuesCount }}</span>
           </div>
-          <IssueList :issues="filteredNewIssues" :empty-text="emptyText('Aucune nouvelle faille détectée.')" />
+          <IssueRenderer
+            :issues="filteredNewIssues"
+            :mode="viewMode"
+            accent="critical"
+            :empty-text="emptyText('Aucune nouvelle faille détectée.')"
+          />
         </article>
 
         <article class="rounded-2xl border border-safe/40 bg-[#042f4b] p-6">
@@ -176,7 +195,12 @@
             <h4 class="text-xl font-semibold text-safe">Failles corrigées</h4>
             <span class="rounded-full border border-safe/40 px-3 py-1 text-sm text-safe">{{ filteredResolvedIssues.length }} / {{ comparison.summary.resolvedIssuesCount }}</span>
           </div>
-          <IssueList :issues="filteredResolvedIssues" :empty-text="emptyText('Aucune faille résolue dans cet intervalle.')" />
+          <IssueRenderer
+            :issues="filteredResolvedIssues"
+            :mode="viewMode"
+            accent="safe"
+            :empty-text="emptyText('Aucune faille résolue dans cet intervalle.')"
+          />
         </article>
 
         <article class="rounded-2xl border border-accent/40 bg-[#042f4b] p-6">
@@ -184,7 +208,12 @@
             <h4 class="text-xl font-semibold text-accent">Toujours présentes</h4>
             <span class="rounded-full border border-accent/40 px-3 py-1 text-sm text-accent">{{ filteredUnchangedIssues.length }} / {{ comparison.summary.unchangedIssuesCount }}</span>
           </div>
-          <IssueList :issues="filteredUnchangedIssues" :empty-text="emptyText('Aucune faille persistante.')" />
+          <IssueRenderer
+            :issues="filteredUnchangedIssues"
+            :mode="viewMode"
+            accent="accent"
+            :empty-text="emptyText('Aucune faille persistante.')"
+          />
         </article>
       </div>
     </template>
@@ -198,8 +227,8 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, ref, watch } from 'vue'
 import type { PropType } from 'vue'
-import type { DetectionConfidence, ScanComparison, ScanHistoryItem, SecurityIssue, Severity } from '../types/scan'
-import { owaspLabel, sortIssues } from '../utils/issuePresentation'
+import type { DetectionConfidence, SecurityIssue, Severity, ScanComparison, ScanHistoryItem } from '../types/scan'
+import { confidenceClassName, groupIssuesByEndpoint, groupIssuesByOwasp, IssueGroup, owaspLabel, severityClassName, sortIssues } from '../utils/issuePresentation'
 
 const props = defineProps<{
   items: ScanHistoryItem[]
@@ -220,9 +249,15 @@ const searchQuery = ref('')
 const severityFilter = ref<Severity | ''>('')
 const confidenceFilter = ref<DetectionConfidence | ''>('')
 const owaspFilter = ref('')
+const viewMode = ref<'detail' | 'owasp' | 'endpoint'>('detail')
 
 const severities: Severity[] = ['Critical', 'High', 'Medium', 'Low']
 const confidences: DetectionConfidence[] = ['High', 'Medium', 'Low']
+const viewModes = [
+  { key: 'detail', label: 'Détail' },
+  { key: 'owasp', label: 'Par OWASP' },
+  { key: 'endpoint', label: 'Par endpoint' }
+] as const
 
 watch(() => props.currentScanId, value => {
   selectedCurrentId.value = value ?? ''
@@ -332,11 +367,19 @@ function normalize(value: string): string {
   return value.trim().toLowerCase()
 }
 
-const IssueList = defineComponent({
-  name: 'ComparisonIssueList',
+const IssueRenderer = defineComponent({
+  name: 'ComparisonIssueRenderer',
   props: {
     issues: {
       type: Array as PropType<SecurityIssue[]>,
+      required: true
+    },
+    mode: {
+      type: String as PropType<'detail' | 'owasp' | 'endpoint'>,
+      required: true
+    },
+    accent: {
+      type: String as PropType<'critical' | 'safe' | 'accent'>,
       required: true
     },
     emptyText: {
@@ -346,23 +389,51 @@ const IssueList = defineComponent({
   },
   setup(componentProps) {
     const orderedIssues = computed(() => sortIssues(componentProps.issues))
-
-    function severityClass(severity: SecurityIssue['severity']): string {
-      if (severity === 'Critical') return 'border-critical/50 text-critical bg-critical/10'
-      if (severity === 'High') return 'border-warning/50 text-warning bg-warning/10'
-      if (severity === 'Medium') return 'border-accent/50 text-accent bg-accent/10'
-      return 'border-cyan-500/50 text-cyan-200 bg-cyan-500/10'
-    }
+    const owaspGroups = computed(() => groupIssuesByOwasp(componentProps.issues))
+    const endpointGroups = computed(() => groupIssuesByEndpoint(componentProps.issues))
 
     return () => {
       if (orderedIssues.value.length === 0) {
         return h('p', { class: 'text-sm text-cyan-100/70' }, componentProps.emptyText)
       }
 
-      return h(
+      if (componentProps.mode === 'owasp') {
+        return h(GroupList, {
+          groups: owaspGroups.value,
+          label: 'Réf. OWASP',
+          accent: componentProps.accent
+        })
+      }
+
+      if (componentProps.mode === 'endpoint') {
+        return h(GroupList, {
+          groups: endpointGroups.value,
+          label: 'Endpoint',
+          accent: componentProps.accent
+        })
+      }
+
+      return h(IssueList, {
+        issues: orderedIssues.value
+      })
+    }
+  }
+})
+
+const IssueList = defineComponent({
+  name: 'ComparisonIssueList',
+  props: {
+    issues: {
+      type: Array as PropType<SecurityIssue[]>,
+      required: true
+    }
+  },
+  setup(componentProps) {
+    return () =>
+      h(
         'div',
         { class: 'space-y-3' },
-        orderedIssues.value.map(issue =>
+        componentProps.issues.map(issue =>
           h('article', { class: 'rounded-xl border border-cyan-800/70 bg-[#032a45]/85 p-4' }, [
             h('div', { class: 'flex items-start justify-between gap-3' }, [
               h('div', { class: 'space-y-2' }, [
@@ -370,7 +441,10 @@ const IssueList = defineComponent({
                 h('p', { class: 'font-mono text-xs text-cyan-100/75 break-all' }, issue.endpoint),
                 h('p', { class: 'text-xs text-cyan-100/65' }, owaspLabel(issue))
               ]),
-              h('span', { class: `rounded-full border px-3 py-1 text-xs ${severityClass(issue.severity)}` }, issue.severity)
+              h('div', { class: 'flex flex-col items-end gap-2' }, [
+                h('span', { class: `rounded-full border px-3 py-1 text-xs ${severityClassName(issue.severity)}` }, issue.severity),
+                h('span', { class: `rounded-full border px-3 py-1 text-xs ${confidenceClassName(issue.detectionConfidence)}` }, issue.detectionConfidence)
+              ])
             ]),
             issue.openApiLocation
               ? h('p', { class: 'mt-3 font-mono text-xs text-cyan-100/65 break-all' }, issue.openApiLocation)
@@ -378,7 +452,55 @@ const IssueList = defineComponent({
           ])
         )
       )
+  }
+})
+
+const GroupList = defineComponent({
+  name: 'ComparisonIssueGroupList',
+  props: {
+    groups: {
+      type: Array as PropType<IssueGroup[]>,
+      required: true
+    },
+    label: {
+      type: String,
+      required: true
+    },
+    accent: {
+      type: String as PropType<'critical' | 'safe' | 'accent'>,
+      required: true
     }
+  },
+  setup(componentProps) {
+    const accentClassMap = {
+      critical: 'border-critical/30 text-critical',
+      safe: 'border-safe/30 text-safe',
+      accent: 'border-accent/30 text-accent'
+    } as const
+
+    return () =>
+      h(
+        'div',
+        { class: 'space-y-3' },
+        componentProps.groups.map(group =>
+          h('article', { class: 'rounded-xl border border-cyan-800/70 bg-[#032a45]/85 p-4' }, [
+            h('div', { class: 'flex items-start justify-between gap-3' }, [
+              h('div', { class: 'space-y-2' }, [
+                h('p', { class: 'text-xs uppercase tracking-wide text-cyan-100/55' }, componentProps.label),
+                h('p', { class: 'text-sm font-medium text-cyan-50 break-words' }, group.label),
+                h('p', { class: 'text-xs text-cyan-100/65' }, `${group.count} finding(s) · ${group.ruleCodes.join(', ')}`)
+              ]),
+              h('div', { class: 'flex flex-col items-end gap-2' }, [
+                h('span', { class: `rounded-full border px-3 py-1 text-xs ${accentClassMap[componentProps.accent]}` }, `${group.count}`),
+                h('span', { class: `rounded-full border px-3 py-1 text-xs ${severityClassName(group.worstSeverity)}` }, group.worstSeverity)
+              ])
+            ]),
+            componentProps.label !== 'Endpoint' && group.endpoints.length > 0
+              ? h('p', { class: 'mt-3 font-mono text-xs text-cyan-100/65 break-all' }, group.endpoints.join(', '))
+              : null
+          ])
+        )
+      )
   }
 })
 </script>
