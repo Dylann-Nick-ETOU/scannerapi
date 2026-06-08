@@ -67,6 +67,32 @@ export interface UpdateIssueReviewRequest {
   comment?: string
 }
 
+export interface ComparedScan {
+  scanId: string
+  targetName: string
+  openApiUrl?: string | null
+  createdAt: string
+  score: number
+  summary: ScanSummary
+}
+
+export interface ScanComparisonSummary {
+  newIssuesCount: number
+  resolvedIssuesCount: number
+  unchangedIssuesCount: number
+}
+
+export interface ScanComparison {
+  baseline: ComparedScan
+  current: ComparedScan
+  scoreDelta: number
+  totalIssuesDelta: number
+  summary: ScanComparisonSummary
+  newIssues: SecurityIssue[]
+  resolvedIssues: SecurityIssue[]
+  unchangedIssues: SecurityIssue[]
+}
+
 export interface ScanHistoryItem {
   id: string
   targetName: string

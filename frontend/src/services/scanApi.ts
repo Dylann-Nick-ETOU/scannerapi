@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AdminUserActivity, AuthResponse, LoginRequest, RegisterRequest, ScanHistoryItem, ScanReport, ScanRequest, SecurityIssue, UpdateIssueReviewRequest } from '../types/scan'
+import type { AdminUserActivity, AuthResponse, LoginRequest, RegisterRequest, ScanComparison, ScanHistoryItem, ScanReport, ScanRequest, SecurityIssue, UpdateIssueReviewRequest } from '../types/scan'
 
 export const scanApi = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api'
@@ -136,6 +136,11 @@ export async function getScans(): Promise<ScanHistoryItem[]> {
 
 export async function getScanById(id: string): Promise<ScanReport> {
   const { data } = await scanApi.get<ScanReport>(`/scans/${id}`)
+  return data
+}
+
+export async function compareScans(currentScanId: string, baselineScanId: string): Promise<ScanComparison> {
+  const { data } = await scanApi.get<ScanComparison>(`/scans/${currentScanId}/compare/${baselineScanId}`)
   return data
 }
 

@@ -119,7 +119,15 @@
         </section>
 
         <section v-else-if="page === 'avant-apres'" key="avant-apres">
-          <BeforeAfterSection />
+          <BeforeAfterSection
+            :items="history"
+            :comparison="comparison"
+            :loading="comparisonLoading"
+            :error="comparisonError"
+            :current-scan-id="comparisonCurrentScanId"
+            :baseline-scan-id="comparisonBaselineScanId"
+            @compare="handleCompareScans"
+          />
         </section>
 
         <section v-else key="historique">
@@ -130,6 +138,7 @@
             @refresh="loadHistory"
             @view="handleViewScan"
             @export="handleExportScan"
+            @compare="prepareComparison"
             @remove="handleDeleteScan"
           />
         </section>
@@ -151,8 +160,8 @@ import RecommendationCard from './components/RecommendationCard.vue'
 import ScanForm from './components/ScanForm.vue'
 import ScanHistorySection from './components/ScanHistorySection.vue'
 import ScoreCard from './components/ScoreCard.vue'
-import { clearAccessToken, deactivateUser, deleteScan, exportScanJson, getAccessToken, getAdminUsers, getScanById, getScans, login, readStoredAuthState, register, scanFromFile, scanFromUrl } from './services/scanApi'
-import type { AdminUserActivity, AuthResponse, RegisterRequest, ScanHistoryItem, ScanReport, SecurityIssue } from './types/scan'
+import { clearAccessToken, compareScans, deactivateUser, deleteScan, exportScanJson, getAccessToken, getAdminUsers, getScanById, getScans, login, readStoredAuthState, register, scanFromFile, scanFromUrl } from './services/scanApi'
+import type { AdminUserActivity, AuthResponse, RegisterRequest, ScanComparison, ScanHistoryItem, ScanReport, SecurityIssue } from './types/scan'
 
 type Page = 'accueil' | 'connexion' | 'scanner' | 'rapport' | 'historique' | 'admin' | 'avant-apres' | 'recommandations'
 
@@ -177,6 +186,11 @@ const report = ref<ScanReport | null>(null)
 const history = ref<ScanHistoryItem[]>([])
 const historyLoading = ref(false)
 const historyError = ref('')
+const comparison = ref<ScanComparison | null>(null)
+const comparisonLoading = ref(false)
+const comparisonError = ref('')
+const comparisonCurrentScanId = ref('')
+const comparisonBaselineScanId = ref('')
 const adminUsers = ref<AdminUserActivity[]>([])
 const adminLoading = ref(false)
 const adminError = ref('')
@@ -186,7 +200,7 @@ const authIdentityLabel = computed(() =>
   authState.value ? `${authState.value.username} (${authState.value.role})` : 'Non connecté'
 )
 const contentWidthClass = computed(() =>
-  page.value === 'rapport' || page.value === 'admin' || page.value === 'recommandations'
+  page.value === 'rapport' || page.value === 'admin' || page.value === 'recommandations' || page.value === 'avant-apres'
     ? 'max-w-[1460px]'
     : 'max-w-[1280px]'
 )
@@ -246,6 +260,10 @@ function handleLogout() {
   authState.value = null
   report.value = null
   history.value = []
+  comparison.value = null
+  comparisonError.value = ''
+  comparisonCurrentScanId.value = ''
+  comparisonBaselineScanId.value = ''
   adminUsers.value = []
   error.value = ''
   historyError.value = ''
@@ -360,10 +378,50 @@ async function handleDeleteScan(id: string) {
   try {
     await deleteScan(id)
     if (report.value?.scanId === id) report.value = null
+    if (comparisonCurrentScanId.value === id || comparisonBaselineScanId.value === id) {
+      comparison.value = null
+      comparisonError.value = ''
+      comparisonCurrentScanId.value = ''
+      comparisonBaselineScanId.value = ''
+    }
     await loadHistory()
   } catch (err) {
     error.value = extractApiError(err, 'Impossible de supprimer ce scan.')
     console.error(err)
+  }
+}
+
+function prepareComparison(scanId: string) {
+  const currentCandidate = report.value?.scanId && report.value.scanId !== scanId
+    ? report.value.scanId
+    : history.value.find(item => item.id !== scanId)?.id ?? ''
+
+  comparisonBaselineScanId.value = scanId
+  comparisonCurrentScanId.value = currentCandidate
+  comparison.value = null
+  comparisonError.value = ''
+  page.value = 'avant-apres'
+
+  if (comparisonCurrentScanId.value && comparisonCurrentScanId.value !== comparisonBaselineScanId.value) {
+    void handleCompareScans(comparisonCurrentScanId.value, comparisonBaselineScanId.value)
+  }
+}
+
+async function handleCompareScans(currentScanId: string, baselineScanId: string) {
+  comparisonLoading.value = true
+  comparisonError.value = ''
+  comparisonCurrentScanId.value = currentScanId
+  comparisonBaselineScanId.value = baselineScanId
+
+  try {
+    comparison.value = await compareScans(currentScanId, baselineScanId)
+    page.value = 'avant-apres'
+  } catch (err) {
+    comparison.value = null
+    comparisonError.value = extractApiError(err, 'Impossible de comparer ces scans.')
+    console.error(err)
+  } finally {
+    comparisonLoading.value = false
   }
 }
 

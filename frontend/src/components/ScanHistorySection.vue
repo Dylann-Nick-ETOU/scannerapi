@@ -48,6 +48,12 @@
                   Exporter JSON
                 </button>
                 <button
+                  class="rounded border border-cyan-700 px-3 py-1 text-cyan-100 hover:border-safe hover:text-safe"
+                  @click="$emit('compare', item.id)"
+                >
+                  Comparer
+                </button>
+                <button
                   class="rounded border border-critical/60 px-3 py-1 text-critical hover:bg-critical/10"
                   @click="$emit('remove', item.id)"
                 >
@@ -75,6 +81,7 @@ defineEmits<{
   refresh: []
   view: [id: string]
   export: [id: string]
+  compare: [id: string]
   remove: [id: string]
 }>()
 
