@@ -7,6 +7,7 @@ namespace ApiSecurityScanner.Application.Rules;
 
 public class SensitiveDataExposureRule : ISecurityRule
 {
+    private static readonly OwaspTop10Mapping Mapping = OwaspTop10Mappings.ExcessiveDataExposure2019;
     private static readonly string[] SensitiveFields =
     [
         "password",
@@ -59,7 +60,10 @@ public class SensitiveDataExposureRule : ISecurityRule
                                 Title = "Champ sensible exposé",
                                 Description = $"Le champ sensible '{field}' est présent dans un schéma de réponse.",
                                 Recommendation = "Ne jamais exposer ces champs dans les DTO de sortie.",
-                                OwaspCategory = "Sensitive Data Exposure"
+                                OwaspCategory = Mapping.Title,
+                                OwaspTop10Id = Mapping.Id,
+                                OwaspTop10Version = Mapping.Version,
+                                OwaspTop10Title = Mapping.Title
                             });
                         }
                     }

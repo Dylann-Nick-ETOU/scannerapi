@@ -7,6 +7,7 @@ namespace ApiSecurityScanner.Application.Rules;
 
 public class SensitiveEndpointRule : ISecurityRule
 {
+    private static readonly OwaspTop10Mapping Mapping = OwaspTop10Mappings.BrokenFunctionLevelAuthorization2023;
     private static readonly string[] SensitiveSegments =
     [
         "/admin",
@@ -55,7 +56,10 @@ public class SensitiveEndpointRule : ISecurityRule
                     Title = "Endpoint sensible sans contrôle d'accès",
                     Description = "Cet endpoint sensible est accessible sans restriction de rôle/policy.",
                     Recommendation = "Ajouter rôles et policies.",
-                    OwaspCategory = "Broken Access Control"
+                    OwaspCategory = Mapping.Title,
+                    OwaspTop10Id = Mapping.Id,
+                    OwaspTop10Version = Mapping.Version,
+                    OwaspTop10Title = Mapping.Title
                 });
             }
         }

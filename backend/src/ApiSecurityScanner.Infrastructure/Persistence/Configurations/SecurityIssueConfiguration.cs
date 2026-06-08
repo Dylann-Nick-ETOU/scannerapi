@@ -13,5 +13,8 @@ public class SecurityIssueConfiguration : IEntityTypeConfiguration<SecurityIssue
         builder.Property(x => x.Endpoint).HasMaxLength(400).IsRequired();
         builder.Property(x => x.Title).HasMaxLength(300).IsRequired();
         builder.Property(x => x.OwaspCategory).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.OwaspTop10Id).HasMaxLength(20).IsRequired();
+        builder.Property(x => x.OwaspTop10Version).HasMaxLength(10).IsRequired();
+        builder.Property(x => x.OwaspTop10Title).HasMaxLength(200).IsRequired();
     }
 }

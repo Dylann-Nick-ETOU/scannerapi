@@ -210,6 +210,7 @@ static void EnsureApplicationSchema(
             EnsureScanOwnerColumn(connection, logger);
             EnsureUserTable(connection, logger);
             EnsureUserColumns(connection, logger);
+            EnsureSecurityIssueColumns(connection, logger);
             logger.LogInformation("Application tables already exist.");
             return;
         }
@@ -299,6 +300,21 @@ static void EnsureUserColumns(NpgsqlConnection connection, Microsoft.Extensions.
         """;
     command.ExecuteNonQuery();
     logger.LogInformation("Ensured AppUsers security columns exist.");
+}
+
+static void EnsureSecurityIssueColumns(NpgsqlConnection connection, Microsoft.Extensions.Logging.ILogger logger)
+{
+    using var command = connection.CreateCommand();
+    command.CommandText = """
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "OwaspTop10Id" character varying(20) NOT NULL DEFAULT '';
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "OwaspTop10Version" character varying(10) NOT NULL DEFAULT '';
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "OwaspTop10Title" character varying(200) NOT NULL DEFAULT '';
+        """;
+    command.ExecuteNonQuery();
+    logger.LogInformation("Ensured SecurityIssues OWASP mapping columns exist.");
 }
 
 static void EnsureScanOwnerColumn(NpgsqlConnection connection, Microsoft.Extensions.Logging.ILogger logger)

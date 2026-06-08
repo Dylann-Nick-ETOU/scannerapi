@@ -8,6 +8,7 @@
           <tr class="border-b border-cyan-800 text-cyan-100">
             <th class="px-4 py-4">Sévérité</th>
             <th class="px-4 py-4">Code règle</th>
+            <th class="px-4 py-4">OWASP</th>
             <th class="px-4 py-4">Endpoint</th>
             <th class="px-4 py-4">Problème détecté</th>
             <th class="px-4 py-4">Recommandation</th>
@@ -17,6 +18,7 @@
           <tr v-for="issue in issues" :key="`${issue.ruleCode}-${issue.endpoint}-${issue.title}`" class="border-b border-cyan-900/70">
             <td class="px-4 py-4"><span class="rounded-full border px-3 py-1 text-sm" :class="severityClass(issue.severity)">{{ issue.severity }}</span></td>
             <td class="px-4 py-4"><span class="rounded bg-[#355d38] px-3 py-1 font-mono text-accent">{{ issue.ruleCode }}</span></td>
+            <td class="px-4 py-4 text-cyan-100/90">{{ owaspLabel(issue) }}</td>
             <td class="px-4 py-4 font-mono text-cyan-100">{{ issue.endpoint }}</td>
             <td class="px-4 py-4 text-cyan-100/90">{{ issue.title }}</td>
             <td class="px-4 py-4 text-cyan-100/90">{{ issue.recommendation }}</td>
@@ -36,5 +38,13 @@ function severityClass(severity: SecurityIssue['severity']): string {
   if (severity === 'High') return 'border-warning/50 text-warning bg-warning/10'
   if (severity === 'Medium') return 'border-accent/50 text-accent bg-accent/10'
   return 'border-cyan-500/50 text-cyan-200 bg-cyan-500/10'
+}
+
+function owaspLabel(issue: SecurityIssue): string {
+  if (issue.owaspTop10Id && issue.owaspTop10Version && issue.owaspTop10Title) {
+    return `${issue.owaspTop10Id}:${issue.owaspTop10Version} - ${issue.owaspTop10Title}`
+  }
+
+  return issue.owaspCategory
 }
 </script>

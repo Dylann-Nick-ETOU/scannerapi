@@ -7,6 +7,7 @@ namespace ApiSecurityScanner.Application.Rules;
 
 public class InsecureServerUrlRule : ISecurityRule
 {
+    private static readonly OwaspTop10Mapping Mapping = OwaspTop10Mappings.SecurityMisconfiguration2023;
     public string RuleCode => "API-CONFIG-001";
     public string Name => "Insecure Server URL";
 
@@ -39,7 +40,10 @@ public class InsecureServerUrlRule : ISecurityRule
                 Title = "Configuration serveur non sécurisée",
                 Description = $"Le serveur '{server.Url}' utilise HTTP.",
                 Recommendation = "Forcer HTTPS.",
-                OwaspCategory = "Security Misconfiguration"
+                OwaspCategory = Mapping.Title,
+                OwaspTop10Id = Mapping.Id,
+                OwaspTop10Version = Mapping.Version,
+                OwaspTop10Title = Mapping.Title
             });
         }
 

@@ -7,6 +7,7 @@ namespace ApiSecurityScanner.Application.Rules;
 
 public class MassAssignmentRule : ISecurityRule
 {
+    private static readonly OwaspTop10Mapping Mapping = OwaspTop10Mappings.MassAssignment2019;
     private static readonly string[] SensitiveWritableFields =
     [
         "role",
@@ -73,7 +74,10 @@ public class MassAssignmentRule : ISecurityRule
                         Title = "Champ sensible assignable par le client",
                         Description = $"Le champ '{fieldPath}' est accessible dans un schéma de requête et peut favoriser une faille de mass assignment.",
                         Recommendation = "Séparer les DTO d'entrée, marquer les champs internes en readOnly et filtrer explicitement les propriétés autorisées côté serveur.",
-                        OwaspCategory = "Mass Assignment"
+                        OwaspCategory = Mapping.Title,
+                        OwaspTop10Id = Mapping.Id,
+                        OwaspTop10Version = Mapping.Version,
+                        OwaspTop10Title = Mapping.Title
                     });
                 }
             }

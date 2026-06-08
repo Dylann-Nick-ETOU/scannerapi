@@ -8,7 +8,7 @@
       <div class="space-y-6 px-8 py-6 text-cyan-100">
         <div class="grid gap-4 md:grid-cols-2 text-sm">
           <p><strong>Endpoint concerné:</strong> <span class="rounded bg-[#12384e] px-2 py-1 font-mono">{{ topIssue.endpoint }}</span></p>
-          <p><strong>Catégorie OWASP:</strong> {{ topIssue.owaspCategory }}</p>
+          <p><strong>Référence OWASP:</strong> {{ owaspLabel(topIssue) }}</p>
           <p><strong>Risque:</strong> {{ topIssue.description }}</p>
           <p><strong>Code règle:</strong> <span class="rounded bg-[#355d38] px-2 py-1 font-mono text-accent">{{ topIssue.ruleCode }}</span></p>
         </div>
@@ -73,5 +73,13 @@ function helperText(text: string): string {
   if (t.includes('erreur')) return 'Middleware global pour gérer les exceptions sans exposer de détails'
   if (t.includes('https')) return 'Forcer le chiffrement des communications pour toutes les requêtes'
   return 'Logger les accès, erreurs et actions critiques avec Serilog'
+}
+
+function owaspLabel(issue: SecurityIssue): string {
+  if (issue.owaspTop10Id && issue.owaspTop10Version && issue.owaspTop10Title) {
+    return `${issue.owaspTop10Id}:${issue.owaspTop10Version} - ${issue.owaspTop10Title}`
+  }
+
+  return `${issue.owaspCategory} (hors mapping direct Top 10)`
 }
 </script>

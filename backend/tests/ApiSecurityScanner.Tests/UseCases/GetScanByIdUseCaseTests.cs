@@ -39,7 +39,10 @@ public class GetScanByIdUseCaseTests
                     Title = "Endpoint sans authentification",
                     Description = "Test issue",
                     Recommendation = "Ajouter JWT/OAuth2.",
-                    OwaspCategory = "Broken Authentication"
+                    OwaspCategory = "Broken Authentication",
+                    OwaspTop10Id = "API2",
+                    OwaspTop10Version = "2023",
+                    OwaspTop10Title = "Broken Authentication"
                 }
             ]
         };
@@ -56,5 +59,8 @@ public class GetScanByIdUseCaseTests
         result.Should().NotBeNull();
         result!.ScanId.Should().Be(scan.Id);
         result.Issues.Should().ContainSingle();
+        result.Issues[0].OwaspTop10Id.Should().Be("API2");
+        result.Issues[0].OwaspTop10Version.Should().Be("2023");
+        result.Issues[0].OwaspTop10Title.Should().Be("Broken Authentication");
     }
 }

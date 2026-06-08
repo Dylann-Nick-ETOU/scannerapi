@@ -8,6 +8,7 @@ namespace ApiSecurityScanner.Application.Rules;
 
 public partial class InventoryManagementRule : ISecurityRule
 {
+    private static readonly OwaspTop10Mapping Mapping = OwaspTop10Mappings.ImproperInventoryManagement2023;
     public string RuleCode => "API-INVENTORY-001";
     public string Name => "Improper Inventory Management";
 
@@ -40,7 +41,10 @@ public partial class InventoryManagementRule : ISecurityRule
                         Title = "Endpoint obsolète encore exposé",
                         Description = "Cette opération est marquée deprecated dans la spec et reste exposée au catalogue d'API.",
                         Recommendation = "Retirer l'endpoint obsolète ou planifier sa suppression avec une date de fin de support claire.",
-                        OwaspCategory = "Improper Inventory Management"
+                        OwaspCategory = Mapping.Title,
+                        OwaspTop10Id = Mapping.Id,
+                        OwaspTop10Version = Mapping.Version,
+                        OwaspTop10Title = Mapping.Title
                     });
                 }
 
@@ -63,7 +67,10 @@ public partial class InventoryManagementRule : ISecurityRule
                     Title = "Ancienne version d'API encore exposée",
                     Description = $"L'endpoint appartient à la version majeure v{endpointVersion.Major} alors que la version la plus récente détectée dans la spec est v{latestMajorVersion.Value}.",
                     Recommendation = "Réduire les versions encore publiées, documenter les versions supportées et supprimer les endpoints hérités non nécessaires.",
-                    OwaspCategory = "Improper Inventory Management"
+                    OwaspCategory = Mapping.Title,
+                    OwaspTop10Id = Mapping.Id,
+                    OwaspTop10Version = Mapping.Version,
+                    OwaspTop10Title = Mapping.Title
                 });
             }
         }

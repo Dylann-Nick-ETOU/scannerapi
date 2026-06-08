@@ -32,6 +32,9 @@ export interface SecurityIssue {
   description: string
   recommendation: string
   owaspCategory: string
+  owaspTop10Id: string
+  owaspTop10Version: string
+  owaspTop10Title: string
 }
 
 export interface ScanSummary {

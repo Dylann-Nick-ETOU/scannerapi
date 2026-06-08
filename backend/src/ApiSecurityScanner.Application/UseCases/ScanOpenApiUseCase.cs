@@ -58,7 +58,10 @@ public class ScanOpenApiUseCase(
                 Title = x.Title,
                 Description = x.Description,
                 Recommendation = x.Recommendation,
-                OwaspCategory = x.OwaspCategory
+                OwaspCategory = x.OwaspCategory,
+                OwaspTop10Id = x.OwaspTop10Id,
+                OwaspTop10Version = x.OwaspTop10Version,
+                OwaspTop10Title = x.OwaspTop10Title
             }).ToList()
         };
     }
