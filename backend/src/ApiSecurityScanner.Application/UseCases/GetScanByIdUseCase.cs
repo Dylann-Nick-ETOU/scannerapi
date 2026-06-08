@@ -33,6 +33,7 @@ public class GetScanByIdUseCase(IScanRepository scanRepository)
                 RuleCode = x.RuleCode,
                 Severity = x.Severity.ToString(),
                 Endpoint = x.Endpoint,
+                OpenApiLocation = x.OpenApiLocation,
                 Title = x.Title,
                 Description = x.Description,
                 Recommendation = x.Recommendation,

@@ -45,34 +45,44 @@ public class MassAssignmentRule : ISecurityRule
                 }
 
                 var endpoint = $"{operation.Key} {path}";
-                var detectedFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var detectedFields = new HashSet<SensitiveWritableFieldMatch>();
 
-                foreach (var mediaType in operation.Value.RequestBody.Content.Values)
+                foreach (var mediaType in operation.Value.RequestBody.Content)
                 {
-                    var schema = mediaType.Schema;
+                    var schema = mediaType.Value.Schema;
                     if (schema is null)
                     {
                         continue;
                     }
 
+                    var location = OpenApiJsonPointer.ForOperation(
+                        path,
+                        operation.Key,
+                        "requestBody",
+                        "content",
+                        mediaType.Key,
+                        "schema");
+
                     foreach (var fieldPath in FindSensitiveWritableFields(
                                  schema,
                                  currentPath: string.Empty,
+                                 pointer: location,
                                  visitedRefs: new HashSet<string>(StringComparer.OrdinalIgnoreCase)))
                     {
                         detectedFields.Add(fieldPath);
                     }
                 }
 
-                foreach (var fieldPath in detectedFields)
+                foreach (var fieldPath in detectedFields.OrderBy(x => x.FieldPath, StringComparer.OrdinalIgnoreCase))
                 {
                     issues.Add(new SecurityIssue
                     {
                         RuleCode = RuleCode,
                         Severity = SeverityLevel.High,
                         Endpoint = endpoint,
+                        OpenApiLocation = fieldPath.Pointer,
                         Title = "Champ sensible assignable par le client",
-                        Description = $"Le champ '{fieldPath}' est accessible dans un schéma de requête et peut favoriser une faille de mass assignment.",
+                        Description = $"Le champ '{fieldPath.FieldPath}' est accessible dans un schéma de requête et peut favoriser une faille de mass assignment.",
                         Recommendation = "Séparer les DTO d'entrée, marquer les champs internes en readOnly et filtrer explicitement les propriétés autorisées côté serveur.",
                         OwaspCategory = Mapping.Title,
                         OwaspTop10Id = Mapping.Id,
@@ -86,12 +96,13 @@ public class MassAssignmentRule : ISecurityRule
         return issues;
     }
 
-    private static HashSet<string> FindSensitiveWritableFields(
+    private static HashSet<SensitiveWritableFieldMatch> FindSensitiveWritableFields(
         OpenApiSchema schema,
         string currentPath,
+        string pointer,
         HashSet<string> visitedRefs)
     {
-        var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var found = new HashSet<SensitiveWritableFieldMatch>();
 
         if (schema.ReadOnly == true)
         {
@@ -111,13 +122,14 @@ public class MassAssignmentRule : ISecurityRule
             var propertyPath = string.IsNullOrWhiteSpace(currentPath)
                 ? property.Key
                 : $"{currentPath}.{property.Key}";
+            var propertyPointer = OpenApiJsonPointer.Append(pointer, "properties", property.Key);
 
             if (property.Value.ReadOnly != true && IsSensitiveWritableField(property.Key))
             {
-                found.Add(propertyPath);
+                found.Add(new SensitiveWritableFieldMatch(propertyPath, propertyPointer));
             }
 
-            foreach (var nested in FindSensitiveWritableFields(property.Value, propertyPath, visitedRefs))
+            foreach (var nested in FindSensitiveWritableFields(property.Value, propertyPath, propertyPointer, visitedRefs))
             {
                 found.Add(nested);
             }
@@ -126,17 +138,27 @@ public class MassAssignmentRule : ISecurityRule
         if (schema.Items is not null)
         {
             var itemsPath = string.IsNullOrWhiteSpace(currentPath) ? "[]" : $"{currentPath}[]";
-            foreach (var nested in FindSensitiveWritableFields(schema.Items, itemsPath, visitedRefs))
+            var itemsPointer = OpenApiJsonPointer.Append(pointer, "items");
+            foreach (var nested in FindSensitiveWritableFields(schema.Items, itemsPath, itemsPointer, visitedRefs))
             {
                 found.Add(nested);
             }
         }
 
-        foreach (var composite in schema.AllOf.Concat(schema.AnyOf).Concat(schema.OneOf))
+        foreach (var (segment, compositeList) in new[]
+                 {
+                     ("allOf", schema.AllOf),
+                     ("anyOf", schema.AnyOf),
+                     ("oneOf", schema.OneOf)
+                 })
         {
-            foreach (var nested in FindSensitiveWritableFields(composite, currentPath, visitedRefs))
+            for (var index = 0; index < compositeList.Count; index++)
             {
-                found.Add(nested);
+                var compositePointer = OpenApiJsonPointer.Append(pointer, segment, index.ToString());
+                foreach (var nested in FindSensitiveWritableFields(compositeList[index], currentPath, compositePointer, visitedRefs))
+                {
+                    found.Add(nested);
+                }
             }
         }
 
@@ -160,4 +182,6 @@ public class MassAssignmentRule : ISecurityRule
         fieldName.Replace("_", string.Empty, StringComparison.Ordinal)
             .Replace("-", string.Empty, StringComparison.Ordinal)
             .Trim();
+
+    private sealed record SensitiveWritableFieldMatch(string FieldPath, string Pointer);
 }

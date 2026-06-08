@@ -41,15 +41,29 @@ public class SensitiveDataExposureRule : ISecurityRule
                         continue;
                     }
 
-                    foreach (var mediaType in response.Value.Content.Values)
+                    foreach (var mediaType in response.Value.Content)
                     {
-                        var schema = mediaType.Schema;
+                        var schema = mediaType.Value.Schema;
                         if (schema is null)
                         {
                             continue;
                         }
 
-                        var exposed = FindSensitiveFields(schema, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                        var location = OpenApiJsonPointer.ForOperation(
+                            path,
+                            operation.Key,
+                            "responses",
+                            response.Key,
+                            "content",
+                            mediaType.Key,
+                            "schema");
+
+                        var exposed = FindSensitiveFields(
+                            schema,
+                            currentPath: string.Empty,
+                            pointer: location,
+                            visitedRefs: new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
                         foreach (var field in exposed)
                         {
                             issues.Add(new SecurityIssue
@@ -57,8 +71,9 @@ public class SensitiveDataExposureRule : ISecurityRule
                                 RuleCode = RuleCode,
                                 Severity = SeverityLevel.Critical,
                                 Endpoint = $"{operation.Key} {path}",
+                                OpenApiLocation = field.Pointer,
                                 Title = "Champ sensible exposé",
-                                Description = $"Le champ sensible '{field}' est présent dans un schéma de réponse.",
+                                Description = $"Le champ sensible '{field.FieldPath}' est présent dans un schéma de réponse.",
                                 Recommendation = "Ne jamais exposer ces champs dans les DTO de sortie.",
                                 OwaspCategory = Mapping.Title,
                                 OwaspTop10Id = Mapping.Id,
@@ -74,9 +89,13 @@ public class SensitiveDataExposureRule : ISecurityRule
         return issues;
     }
 
-    private static HashSet<string> FindSensitiveFields(OpenApiSchema schema, HashSet<string> visitedRefs)
+    private static HashSet<SensitiveFieldMatch> FindSensitiveFields(
+        OpenApiSchema schema,
+        string currentPath,
+        string pointer,
+        HashSet<string> visitedRefs)
     {
-        var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var found = new HashSet<SensitiveFieldMatch>();
 
         if (schema.Reference?.Id is { Length: > 0 } referenceId)
         {
@@ -88,12 +107,17 @@ public class SensitiveDataExposureRule : ISecurityRule
 
         foreach (var property in schema.Properties)
         {
+            var propertyPath = string.IsNullOrWhiteSpace(currentPath)
+                ? property.Key
+                : $"{currentPath}.{property.Key}";
+            var propertyPointer = OpenApiJsonPointer.Append(pointer, "properties", property.Key);
+
             if (SensitiveFields.Contains(property.Key, StringComparer.OrdinalIgnoreCase))
             {
-                found.Add(property.Key);
+                found.Add(new SensitiveFieldMatch(propertyPath, propertyPointer));
             }
 
-            foreach (var nested in FindSensitiveFields(property.Value, visitedRefs))
+            foreach (var nested in FindSensitiveFields(property.Value, propertyPath, propertyPointer, visitedRefs))
             {
                 found.Add(nested);
             }
@@ -101,20 +125,33 @@ public class SensitiveDataExposureRule : ISecurityRule
 
         if (schema.Items is not null)
         {
-            foreach (var nested in FindSensitiveFields(schema.Items, visitedRefs))
+            var itemsPath = string.IsNullOrWhiteSpace(currentPath) ? "[]" : $"{currentPath}[]";
+            var itemsPointer = OpenApiJsonPointer.Append(pointer, "items");
+            foreach (var nested in FindSensitiveFields(schema.Items, itemsPath, itemsPointer, visitedRefs))
             {
                 found.Add(nested);
             }
         }
 
-        foreach (var composite in schema.AllOf.Concat(schema.AnyOf).Concat(schema.OneOf))
+        foreach (var (segment, compositeList) in new[]
+                 {
+                     ("allOf", schema.AllOf),
+                     ("anyOf", schema.AnyOf),
+                     ("oneOf", schema.OneOf)
+                 })
         {
-            foreach (var nested in FindSensitiveFields(composite, visitedRefs))
+            for (var index = 0; index < compositeList.Count; index++)
             {
-                found.Add(nested);
+                var compositePointer = OpenApiJsonPointer.Append(pointer, segment, index.ToString());
+                foreach (var nested in FindSensitiveFields(compositeList[index], currentPath, compositePointer, visitedRefs))
+                {
+                    found.Add(nested);
+                }
             }
         }
 
         return found;
     }
+
+    private sealed record SensitiveFieldMatch(string FieldPath, string Pointer);
 }

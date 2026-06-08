@@ -30,6 +30,7 @@ public partial class InventoryManagementRule : ISecurityRule
             foreach (var operation in pathItem.Operations)
             {
                 var endpoint = $"{operation.Key} {path}";
+                var operationLocation = OpenApiJsonPointer.ForOperation(path, operation.Key);
 
                 if (operation.Value.Deprecated)
                 {
@@ -38,6 +39,7 @@ public partial class InventoryManagementRule : ISecurityRule
                         RuleCode = RuleCode,
                         Severity = SeverityLevel.Medium,
                         Endpoint = endpoint,
+                        OpenApiLocation = OpenApiJsonPointer.Append(operationLocation, "deprecated"),
                         Title = "Endpoint obsolète encore exposé",
                         Description = "Cette opération est marquée deprecated dans la spec et reste exposée au catalogue d'API.",
                         Recommendation = "Retirer l'endpoint obsolète ou planifier sa suppression avec une date de fin de support claire.",
@@ -64,6 +66,7 @@ public partial class InventoryManagementRule : ISecurityRule
                     RuleCode = RuleCode,
                     Severity = SeverityLevel.Medium,
                     Endpoint = endpoint,
+                    OpenApiLocation = operationLocation,
                     Title = "Ancienne version d'API encore exposée",
                     Description = $"L'endpoint appartient à la version majeure v{endpointVersion.Major} alors que la version la plus récente détectée dans la spec est v{latestMajorVersion.Value}.",
                     Recommendation = "Réduire les versions encore publiées, documenter les versions supportées et supprimer les endpoints hérités non nécessaires.",

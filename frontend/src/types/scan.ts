@@ -28,6 +28,7 @@ export interface SecurityIssue {
   ruleCode: string
   severity: Severity
   endpoint: string
+  openApiLocation: string
   title: string
   description: string
   recommendation: string

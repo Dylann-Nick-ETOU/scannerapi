@@ -54,6 +54,7 @@ public class MassAssignmentRuleTests
         issues[0].RuleCode.Should().Be("API-MASS-001");
         issues[0].Endpoint.Should().Be("Post /users");
         issues[0].Description.Should().Contain("role");
+        issues[0].OpenApiLocation.Should().Be("/paths/~1users/post/requestBody/content/application~1json/schema/properties/role");
     }
 
     [Fact]
@@ -162,5 +163,6 @@ public class MassAssignmentRuleTests
 
         issues.Should().ContainSingle();
         issues[0].Description.Should().Contain("profile.permissions");
+        issues[0].OpenApiLocation.Should().Be("/paths/~1accounts/put/requestBody/content/application~1json/schema/properties/profile/properties/permissions");
     }
 }

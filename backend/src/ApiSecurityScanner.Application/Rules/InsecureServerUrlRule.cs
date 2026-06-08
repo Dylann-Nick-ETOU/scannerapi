@@ -20,8 +20,9 @@ public class InsecureServerUrlRule : ISecurityRule
 
         var issues = new List<SecurityIssue>();
 
-        foreach (var server in openApi.Servers)
+        for (var serverIndex = 0; serverIndex < openApi.Servers.Count; serverIndex++)
         {
+            var server = openApi.Servers[serverIndex];
             if (!Uri.TryCreate(server.Url, UriKind.Absolute, out var uri))
             {
                 continue;
@@ -37,6 +38,7 @@ public class InsecureServerUrlRule : ISecurityRule
                 RuleCode = RuleCode,
                 Severity = SeverityLevel.Medium,
                 Endpoint = "Server URL",
+                OpenApiLocation = OpenApiJsonPointer.Create("servers", serverIndex.ToString(), "url"),
                 Title = "Configuration serveur non sécurisée",
                 Description = $"Le serveur '{server.Url}' utilise HTTP.",
                 Recommendation = "Forcer HTTPS.",

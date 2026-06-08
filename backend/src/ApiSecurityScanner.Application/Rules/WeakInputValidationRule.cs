@@ -25,14 +25,15 @@ public class WeakInputValidationRule : ISecurityRule
             foreach (var operation in pathItem.Operations)
             {
                 var endpoint = $"{operation.Key} {path}";
-
-                if (HasWeakRequestBodyValidation(operation.Value))
+                var weakRequestBodyLocation = FindWeakRequestBodyLocation(path, operation.Key, operation.Value);
+                if (weakRequestBodyLocation is not null)
                 {
                     issues.Add(new SecurityIssue
                     {
                         RuleCode = RuleCodeValue,
                         Severity = SeverityLevel.Medium,
                         Endpoint = endpoint,
+                        OpenApiLocation = weakRequestBodyLocation,
                         Title = "Validation d'entrée insuffisante",
                         Description = "Les schémas de requête ne définissent pas assez de contraintes de validation (required, min/max, format, pattern).",
                         Recommendation = "Ajouter une validation stricte avec FluentValidation.",
@@ -40,43 +41,54 @@ public class WeakInputValidationRule : ISecurityRule
                     });
                 }
 
-                issues.AddRange(GetWeakParameterIssues(pathItem, operation.Value, endpoint));
+                issues.AddRange(GetWeakParameterIssues(path, operation.Key, pathItem, operation.Value, endpoint));
             }
         }
 
         return issues;
     }
 
-    private static bool HasWeakRequestBodyValidation(OpenApiOperation operation)
+    private static string? FindWeakRequestBodyLocation(string path, OperationType operationType, OpenApiOperation operation)
     {
         if (operation.RequestBody?.Content is null)
         {
-            return false;
+            return null;
         }
 
-        foreach (var mediaType in operation.RequestBody.Content.Values)
+        foreach (var mediaType in operation.RequestBody.Content)
         {
-            var schema = mediaType.Schema;
+            var schema = mediaType.Value.Schema;
             if (schema is null)
             {
                 continue;
             }
 
-            if (HasWeakSchemaValidation(schema, new HashSet<string>(StringComparer.OrdinalIgnoreCase)))
+            var pointer = OpenApiJsonPointer.ForOperation(
+                path,
+                operationType,
+                "requestBody",
+                "content",
+                mediaType.Key,
+                "schema");
+
+            var weakLocation = FindWeakSchemaLocation(schema, pointer, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            if (weakLocation is not null)
             {
-                return true;
+                return weakLocation;
             }
         }
 
-        return false;
+        return null;
     }
 
     private static IEnumerable<SecurityIssue> GetWeakParameterIssues(
+        string path,
+        OperationType operationType,
         OpenApiPathItem pathItem,
         OpenApiOperation operation,
         string endpoint)
     {
-        foreach (var parameter in MergeParameters(pathItem, operation))
+        foreach (var parameter in MergeParameters(path, operationType, pathItem, operation))
         {
             var location = parameter.In;
             if (location is not ParameterLocation.Query and not ParameterLocation.Path and not ParameterLocation.Header)
@@ -93,6 +105,7 @@ public class WeakInputValidationRule : ISecurityRule
                     RuleCode = RuleCodeValue,
                     Severity = SeverityLevel.Medium,
                     Endpoint = endpoint,
+                    OpenApiLocation = parameter.LocationPointer,
                     Title = $"Paramètre {locationLabel} mal défini",
                     Description = $"Le paramètre '{parameter.Name}' doit être obligatoire et définir des contraintes de validation adaptées.",
                     Recommendation = $"Marquer '{parameter.Name}' comme required et ajouter des contraintes OpenAPI (pattern, enum, min/max, minLength/maxLength).",
@@ -117,6 +130,7 @@ public class WeakInputValidationRule : ISecurityRule
                 RuleCode = RuleCodeValue,
                 Severity = SeverityLevel.Medium,
                 Endpoint = endpoint,
+                OpenApiLocation = OpenApiJsonPointer.Append(parameter.LocationPointer, "schema"),
                 Title = $"Paramètre {locationLabel} peu contraint",
                 Description = $"Le paramètre '{parameter.Name}' n'expose pas assez de contraintes de validation dans sa définition OpenAPI.",
                 Recommendation = $"Ajouter des contraintes OpenAPI sur '{parameter.Name}' ({locationLabel}) : min/max, minLength/maxLength, pattern, enum, format.",
@@ -125,24 +139,34 @@ public class WeakInputValidationRule : ISecurityRule
         }
     }
 
-    private static IEnumerable<OpenApiParameter> MergeParameters(OpenApiPathItem pathItem, OpenApiOperation operation)
+    private static IEnumerable<OpenApiParameterTarget> MergeParameters(
+        string path,
+        OperationType operationType,
+        OpenApiPathItem pathItem,
+        OpenApiOperation operation)
     {
-        var merged = new Dictionary<(string Name, ParameterLocation? Location), OpenApiParameter>();
+        var merged = new Dictionary<(string Name, ParameterLocation? Location), OpenApiParameterTarget>();
 
-        foreach (var parameter in pathItem.Parameters)
+        for (var index = 0; index < pathItem.Parameters.Count; index++)
         {
-            merged[(parameter.Name, parameter.In)] = parameter;
+            var parameter = pathItem.Parameters[index];
+            merged[(parameter.Name, parameter.In)] = new OpenApiParameterTarget(
+                parameter,
+                OpenApiJsonPointer.Create("paths", path, "parameters", index.ToString()));
         }
 
-        foreach (var parameter in operation.Parameters)
+        for (var index = 0; index < operation.Parameters.Count; index++)
         {
-            merged[(parameter.Name, parameter.In)] = parameter;
+            var parameter = operation.Parameters[index];
+            merged[(parameter.Name, parameter.In)] = new OpenApiParameterTarget(
+                parameter,
+                OpenApiJsonPointer.ForOperation(path, operationType, "parameters", index.ToString()));
         }
 
         return merged.Values;
     }
 
-    private static bool HasWeakParameterValidation(OpenApiParameter parameter)
+    private static bool HasWeakParameterValidation(OpenApiParameterTarget parameter)
     {
         var schema = parameter.Schema;
         if (schema is null)
@@ -150,51 +174,75 @@ public class WeakInputValidationRule : ISecurityRule
             return false;
         }
 
-        return !HasAnySchemaConstraint(schema) || HasWeakSchemaValidation(schema, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        return !HasAnySchemaConstraint(schema) || FindWeakSchemaLocation(schema, string.Empty, new HashSet<string>(StringComparer.OrdinalIgnoreCase)) is not null;
     }
 
-    private static bool HasWeakSchemaValidation(OpenApiSchema schema, HashSet<string> visitedRefs)
+    private static string? FindWeakSchemaLocation(OpenApiSchema schema, string pointer, HashSet<string> visitedRefs)
     {
         if (schema.Reference?.Id is { Length: > 0 } referenceId)
         {
             if (!visitedRefs.Add(referenceId))
             {
-                return false;
+                return null;
             }
         }
 
-        foreach (var property in schema.Properties.Values)
+        foreach (var property in schema.Properties)
         {
-            if (!HasAnySchemaConstraint(property))
+            var propertyPointer = OpenApiJsonPointer.Append(pointer, "properties", property.Key);
+
+            if (!HasAnySchemaConstraint(property.Value))
             {
-                return true;
+                return propertyPointer;
             }
 
-            if (HasWeakSchemaValidation(property, visitedRefs))
+            var nestedWeakLocation = FindWeakSchemaLocation(property.Value, propertyPointer, visitedRefs);
+            if (nestedWeakLocation is not null)
             {
-                return true;
+                return nestedWeakLocation;
             }
         }
 
         if (schema.Type == "object" && schema.Properties.Count > 0 && schema.Required.Count == 0)
         {
-            return true;
+            return pointer;
         }
 
-        if (schema.Items is not null && HasWeakSchemaValidation(schema.Items, visitedRefs))
+        if (schema.Items is not null)
         {
-            return true;
-        }
+            var itemsWeakLocation = FindWeakSchemaLocation(
+                schema.Items,
+                OpenApiJsonPointer.Append(pointer, "items"),
+                visitedRefs);
 
-        foreach (var composite in schema.AllOf.Concat(schema.AnyOf).Concat(schema.OneOf))
-        {
-            if (HasWeakSchemaValidation(composite, visitedRefs))
+            if (itemsWeakLocation is not null)
             {
-                return true;
+                return itemsWeakLocation;
             }
         }
 
-        return false;
+        foreach (var (segment, compositeList) in new[]
+                 {
+                     ("allOf", schema.AllOf),
+                     ("anyOf", schema.AnyOf),
+                     ("oneOf", schema.OneOf)
+                 })
+        {
+            for (var index = 0; index < compositeList.Count; index++)
+            {
+                var compositeWeakLocation = FindWeakSchemaLocation(
+                    compositeList[index],
+                    OpenApiJsonPointer.Append(pointer, segment, index.ToString()),
+                    visitedRefs);
+
+                if (compositeWeakLocation is not null)
+                {
+                    return compositeWeakLocation;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static bool HasAnySchemaConstraint(OpenApiSchema schema)
@@ -214,5 +262,13 @@ public class WeakInputValidationRule : ISecurityRule
                schema.UniqueItems == true ||
                schema.MinProperties.HasValue ||
                schema.MaxProperties.HasValue;
+    }
+
+    private sealed record OpenApiParameterTarget(OpenApiParameter Parameter, string LocationPointer)
+    {
+        public string Name => Parameter.Name;
+        public ParameterLocation? In => Parameter.In;
+        public bool Required => Parameter.Required;
+        public OpenApiSchema? Schema => Parameter.Schema;
     }
 }

@@ -9,6 +9,7 @@
         <div class="grid gap-4 md:grid-cols-2 text-sm">
           <p><strong>Endpoint concerné:</strong> <span class="rounded bg-[#12384e] px-2 py-1 font-mono">{{ topIssue.endpoint }}</span></p>
           <p><strong>Référence OWASP:</strong> {{ owaspLabel(topIssue) }}</p>
+          <p><strong>Chemin OpenAPI:</strong> <span class="rounded bg-[#12384e] px-2 py-1 font-mono break-all">{{ topIssue.openApiLocation || '-' }}</span></p>
           <p><strong>Risque:</strong> {{ topIssue.description }}</p>
           <p><strong>Code règle:</strong> <span class="rounded bg-[#355d38] px-2 py-1 font-mono text-accent">{{ topIssue.ruleCode }}</span></p>
         </div>

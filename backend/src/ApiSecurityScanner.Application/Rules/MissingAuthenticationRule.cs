@@ -31,11 +31,14 @@ public class MissingAuthenticationRule : ISecurityRule
                     continue;
                 }
 
+                var location = OpenApiJsonPointer.ForOperation(path, operation.Key);
+
                 issues.Add(new SecurityIssue
                 {
                     RuleCode = RuleCode,
                     Severity = SeverityLevel.High,
                     Endpoint = $"{operation.Key} {path}",
+                    OpenApiLocation = location,
                     Title = "Endpoint sans authentification",
                     Description = "Cet endpoint semble exposé sans mécanisme d'authentification.",
                     Recommendation = "Ajouter JWT/OAuth2.",

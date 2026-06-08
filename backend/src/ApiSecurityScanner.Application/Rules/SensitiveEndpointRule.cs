@@ -48,11 +48,14 @@ public class SensitiveEndpointRule : ISecurityRule
                     continue;
                 }
 
+                var location = OpenApiJsonPointer.ForOperation(path, operation.Key);
+
                 issues.Add(new SecurityIssue
                 {
                     RuleCode = RuleCode,
                     Severity = SeverityLevel.High,
                     Endpoint = $"{operation.Key} {path}",
+                    OpenApiLocation = location,
                     Title = "Endpoint sensible sans contrôle d'accès",
                     Description = "Cet endpoint sensible est accessible sans restriction de rôle/policy.",
                     Recommendation = "Ajouter rôles et policies.",

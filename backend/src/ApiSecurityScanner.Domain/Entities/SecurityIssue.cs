@@ -9,6 +9,7 @@ public class SecurityIssue
     public string RuleCode { get; set; } = string.Empty;
     public SeverityLevel Severity { get; set; }
     public string Endpoint { get; set; } = string.Empty;
+    public string OpenApiLocation { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string Recommendation { get; set; } = string.Empty;

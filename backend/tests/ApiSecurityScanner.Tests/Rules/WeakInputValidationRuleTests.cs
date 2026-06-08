@@ -46,6 +46,7 @@ public class WeakInputValidationRuleTests
         issues[0].RuleCode.Should().Be("API-VALID-001");
         issues[0].Endpoint.Should().Be("Get /activities");
         issues[0].Description.Should().Contain("search");
+        issues[0].OpenApiLocation.Should().Be("/paths/~1activities/get/parameters/0/schema");
     }
 
     [Fact]
@@ -135,5 +136,6 @@ public class WeakInputValidationRuleTests
         issues.Should().ContainSingle();
         issues[0].Title.Should().Contain("path");
         issues[0].Recommendation.Should().Contain("required");
+        issues[0].OpenApiLocation.Should().Be("/paths/~1activities~1{id}/get/parameters/0");
     }
 }

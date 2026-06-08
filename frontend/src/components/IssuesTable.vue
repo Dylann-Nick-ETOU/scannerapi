@@ -3,13 +3,14 @@
     <h3 class="text-2xl font-semibold">Liste des failles détectées</h3>
     <p class="mt-2 text-cyan-100/80">Détails des vulnérabilités identifiées</p>
     <div class="mt-6 overflow-x-auto rounded-2xl border border-cyan-800/70">
-      <table class="w-full min-w-[940px] text-left text-lg">
+      <table class="w-full min-w-[1160px] text-left text-lg">
         <thead class="bg-[#04314e]">
           <tr class="border-b border-cyan-800 text-cyan-100">
             <th class="px-4 py-4">Sévérité</th>
             <th class="px-4 py-4">Code règle</th>
             <th class="px-4 py-4">OWASP</th>
             <th class="px-4 py-4">Endpoint</th>
+            <th class="px-4 py-4">Chemin spec</th>
             <th class="px-4 py-4">Problème détecté</th>
             <th class="px-4 py-4">Recommandation</th>
           </tr>
@@ -20,6 +21,7 @@
             <td class="px-4 py-4"><span class="rounded bg-[#355d38] px-3 py-1 font-mono text-accent">{{ issue.ruleCode }}</span></td>
             <td class="px-4 py-4 text-cyan-100/90">{{ owaspLabel(issue) }}</td>
             <td class="px-4 py-4 font-mono text-cyan-100">{{ issue.endpoint }}</td>
+            <td class="px-4 py-4 font-mono text-sm text-cyan-100/80 break-all">{{ issue.openApiLocation || '-' }}</td>
             <td class="px-4 py-4 text-cyan-100/90">{{ issue.title }}</td>
             <td class="px-4 py-4 text-cyan-100/90">{{ issue.recommendation }}</td>
           </tr>
