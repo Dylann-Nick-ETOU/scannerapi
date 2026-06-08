@@ -51,6 +51,66 @@
     </div>
 
     <template v-if="comparison">
+      <div class="grid gap-3 rounded-2xl border border-cyan-800/70 bg-[#04314e]/70 p-4 md:grid-cols-2 xl:grid-cols-5">
+        <label class="flex flex-col gap-2 text-sm text-cyan-100/85 xl:col-span-2">
+          <span>Recherche</span>
+          <input
+            v-model.trim="searchQuery"
+            type="text"
+            placeholder="endpoint, règle, OWASP, recommandation..."
+            class="h-11 rounded-xl border border-cyan-800 bg-[#032a45] px-4 text-cyan-50 outline-none transition placeholder:text-cyan-200/45 focus:border-accent"
+          >
+        </label>
+
+        <label class="flex flex-col gap-2 text-sm text-cyan-100/85">
+          <span>Sévérité</span>
+          <select
+            v-model="severityFilter"
+            class="h-11 rounded-xl border border-cyan-800 bg-[#032a45] px-4 text-cyan-50 outline-none transition focus:border-accent"
+          >
+            <option value="">Toutes</option>
+            <option v-for="severity in severities" :key="severity" :value="severity">{{ severity }}</option>
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-2 text-sm text-cyan-100/85">
+          <span>Confiance</span>
+          <select
+            v-model="confidenceFilter"
+            class="h-11 rounded-xl border border-cyan-800 bg-[#032a45] px-4 text-cyan-50 outline-none transition focus:border-accent"
+          >
+            <option value="">Toutes</option>
+            <option v-for="confidence in confidences" :key="confidence" :value="confidence">{{ confidence }}</option>
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-2 text-sm text-cyan-100/85">
+          <span>OWASP</span>
+          <select
+            v-model="owaspFilter"
+            class="h-11 rounded-xl border border-cyan-800 bg-[#032a45] px-4 text-cyan-50 outline-none transition focus:border-accent"
+          >
+            <option value="">Tous</option>
+            <option v-for="option in owaspOptions" :key="option" :value="option">{{ option }}</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="flex flex-col gap-3 text-sm text-cyan-100/80 lg:flex-row lg:items-center lg:justify-between">
+        <p>
+          {{ filteredNewIssues.length + filteredResolvedIssues.length + filteredUnchangedIssues.length }}
+          finding(s) affiché(s) sur
+          {{ comparison.summary.newIssuesCount + comparison.summary.resolvedIssuesCount + comparison.summary.unchangedIssuesCount }}
+        </p>
+        <button
+          class="inline-flex h-10 items-center justify-center rounded-xl border border-cyan-700 px-4 text-cyan-100 transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="!hasActiveFilters"
+          @click="resetFilters"
+        >
+          Réinitialiser les filtres
+        </button>
+      </div>
+
       <div class="grid gap-4 lg:grid-cols-4">
         <article class="rounded-2xl border border-cyan-800/70 bg-[#04314e] p-5">
           <p class="text-sm text-cyan-100/70">Delta score</p>
@@ -106,25 +166,25 @@
         <article class="rounded-2xl border border-critical/40 bg-[#042f4b] p-6">
           <div class="mb-4 flex items-center justify-between gap-3">
             <h4 class="text-xl font-semibold text-critical">Nouvelles failles</h4>
-            <span class="rounded-full border border-critical/40 px-3 py-1 text-sm text-critical">{{ comparison.summary.newIssuesCount }}</span>
+            <span class="rounded-full border border-critical/40 px-3 py-1 text-sm text-critical">{{ filteredNewIssues.length }} / {{ comparison.summary.newIssuesCount }}</span>
           </div>
-          <IssueList :issues="comparison.newIssues" empty-text="Aucune nouvelle faille détectée." />
+          <IssueList :issues="filteredNewIssues" :empty-text="emptyText('Aucune nouvelle faille détectée.')" />
         </article>
 
         <article class="rounded-2xl border border-safe/40 bg-[#042f4b] p-6">
           <div class="mb-4 flex items-center justify-between gap-3">
             <h4 class="text-xl font-semibold text-safe">Failles corrigées</h4>
-            <span class="rounded-full border border-safe/40 px-3 py-1 text-sm text-safe">{{ comparison.summary.resolvedIssuesCount }}</span>
+            <span class="rounded-full border border-safe/40 px-3 py-1 text-sm text-safe">{{ filteredResolvedIssues.length }} / {{ comparison.summary.resolvedIssuesCount }}</span>
           </div>
-          <IssueList :issues="comparison.resolvedIssues" empty-text="Aucune faille résolue dans cet intervalle." />
+          <IssueList :issues="filteredResolvedIssues" :empty-text="emptyText('Aucune faille résolue dans cet intervalle.')" />
         </article>
 
         <article class="rounded-2xl border border-accent/40 bg-[#042f4b] p-6">
           <div class="mb-4 flex items-center justify-between gap-3">
             <h4 class="text-xl font-semibold text-accent">Toujours présentes</h4>
-            <span class="rounded-full border border-accent/40 px-3 py-1 text-sm text-accent">{{ comparison.summary.unchangedIssuesCount }}</span>
+            <span class="rounded-full border border-accent/40 px-3 py-1 text-sm text-accent">{{ filteredUnchangedIssues.length }} / {{ comparison.summary.unchangedIssuesCount }}</span>
           </div>
-          <IssueList :issues="comparison.unchangedIssues" empty-text="Aucune faille persistante." />
+          <IssueList :issues="filteredUnchangedIssues" :empty-text="emptyText('Aucune faille persistante.')" />
         </article>
       </div>
     </template>
@@ -138,7 +198,7 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, ref, watch } from 'vue'
 import type { PropType } from 'vue'
-import type { ScanComparison, ScanHistoryItem, SecurityIssue } from '../types/scan'
+import type { DetectionConfidence, ScanComparison, ScanHistoryItem, SecurityIssue, Severity } from '../types/scan'
 import { owaspLabel, sortIssues } from '../utils/issuePresentation'
 
 const props = defineProps<{
@@ -156,6 +216,13 @@ const emit = defineEmits<{
 
 const selectedCurrentId = ref(props.currentScanId ?? '')
 const selectedBaselineId = ref(props.baselineScanId ?? '')
+const searchQuery = ref('')
+const severityFilter = ref<Severity | ''>('')
+const confidenceFilter = ref<DetectionConfidence | ''>('')
+const owaspFilter = ref('')
+
+const severities: Severity[] = ['Critical', 'High', 'Medium', 'Low']
+const confidences: DetectionConfidence[] = ['High', 'Medium', 'Low']
 
 watch(() => props.currentScanId, value => {
   selectedCurrentId.value = value ?? ''
@@ -168,6 +235,30 @@ watch(() => props.baselineScanId, value => {
 const canCompare = computed(() =>
   Boolean(selectedCurrentId.value && selectedBaselineId.value && selectedCurrentId.value !== selectedBaselineId.value)
 )
+
+const comparisonIssues = computed(() => {
+  if (!props.comparison) {
+    return []
+  }
+
+  return [
+    ...props.comparison.newIssues,
+    ...props.comparison.resolvedIssues,
+    ...props.comparison.unchangedIssues
+  ]
+})
+
+const owaspOptions = computed(() => {
+  return [...new Set(comparisonIssues.value.map(issue => owaspLabel(issue)))].sort((left, right) => left.localeCompare(right, 'fr'))
+})
+
+const hasActiveFilters = computed(() =>
+  Boolean(searchQuery.value || severityFilter.value || confidenceFilter.value || owaspFilter.value)
+)
+
+const filteredNewIssues = computed(() => filterIssues(props.comparison?.newIssues ?? []))
+const filteredResolvedIssues = computed(() => filterIssues(props.comparison?.resolvedIssues ?? []))
+const filteredUnchangedIssues = computed(() => filterIssues(props.comparison?.unchangedIssues ?? []))
 
 function submitCompare() {
   if (!canCompare.value) {
@@ -187,6 +278,58 @@ function formatScanOption(item: ScanHistoryItem): string {
 
 function signed(value: number): string {
   return value > 0 ? `+${value}` : value.toString()
+}
+
+function resetFilters() {
+  searchQuery.value = ''
+  severityFilter.value = ''
+  confidenceFilter.value = ''
+  owaspFilter.value = ''
+}
+
+function emptyText(defaultText: string): string {
+  return hasActiveFilters.value ? 'Aucune faille ne correspond aux filtres sélectionnés.' : defaultText
+}
+
+function filterIssues(issues: SecurityIssue[]): SecurityIssue[] {
+  const query = normalize(searchQuery.value)
+
+  return sortIssues(issues).filter(issue => {
+    if (severityFilter.value && issue.severity !== severityFilter.value) {
+      return false
+    }
+
+    if (confidenceFilter.value && issue.detectionConfidence !== confidenceFilter.value) {
+      return false
+    }
+
+    const issueOwaspLabel = owaspLabel(issue)
+    if (owaspFilter.value && issueOwaspLabel !== owaspFilter.value) {
+      return false
+    }
+
+    if (!query) {
+      return true
+    }
+
+    const haystack = [
+      issue.ruleCode,
+      issue.endpoint,
+      issue.title,
+      issue.description,
+      issue.recommendation,
+      issue.openApiLocation,
+      issueOwaspLabel
+    ]
+      .join(' ')
+      .toLowerCase()
+
+    return haystack.includes(query)
+  })
+}
+
+function normalize(value: string): string {
+  return value.trim().toLowerCase()
 }
 
 const IssueList = defineComponent({
