@@ -7,7 +7,8 @@ namespace ApiSecurityScanner.Application.Rules;
 
 public class WeakInputValidationRule : ISecurityRule
 {
-    public string RuleCode => "API-VALID-001";
+    private const string RuleCodeValue = "API-VALID-001";
+    public string RuleCode => RuleCodeValue;
     public string Name => "Weak Input Validation";
 
     public IReadOnlyList<SecurityIssue> Evaluate(object document)
@@ -23,48 +24,136 @@ public class WeakInputValidationRule : ISecurityRule
         {
             foreach (var operation in pathItem.Operations)
             {
-                var hasWeakValidation = false;
+                var endpoint = $"{operation.Key} {path}";
 
-                if (operation.Value.RequestBody?.Content is not null)
+                if (HasWeakRequestBodyValidation(operation.Value))
                 {
-                    foreach (var mediaType in operation.Value.RequestBody.Content.Values)
+                    issues.Add(new SecurityIssue
                     {
-                        var schema = mediaType.Schema;
-                        if (schema is null)
-                        {
-                            continue;
-                        }
-
-                        if (HasWeakValidation(schema, new HashSet<string>(StringComparer.OrdinalIgnoreCase)))
-                        {
-                            hasWeakValidation = true;
-                            break;
-                        }
-                    }
+                        RuleCode = RuleCodeValue,
+                        Severity = SeverityLevel.Medium,
+                        Endpoint = endpoint,
+                        Title = "Validation d'entrée insuffisante",
+                        Description = "Les schémas de requête ne définissent pas assez de contraintes de validation (required, min/max, format, pattern).",
+                        Recommendation = "Ajouter une validation stricte avec FluentValidation.",
+                        OwaspCategory = "Improper Input Validation"
+                    });
                 }
 
-                if (!hasWeakValidation)
-                {
-                    continue;
-                }
-
-                issues.Add(new SecurityIssue
-                {
-                    RuleCode = RuleCode,
-                    Severity = SeverityLevel.Medium,
-                    Endpoint = $"{operation.Key} {path}",
-                    Title = "Validation d'entrée insuffisante",
-                    Description = "Les schémas de requête ne définissent pas assez de contraintes de validation (required, min/max, format, pattern).",
-                    Recommendation = "Ajouter une validation stricte avec FluentValidation.",
-                    OwaspCategory = "Improper Input Validation"
-                });
+                issues.AddRange(GetWeakParameterIssues(pathItem, operation.Value, endpoint));
             }
         }
 
         return issues;
     }
 
-    private static bool HasWeakValidation(OpenApiSchema schema, HashSet<string> visitedRefs)
+    private static bool HasWeakRequestBodyValidation(OpenApiOperation operation)
+    {
+        if (operation.RequestBody?.Content is null)
+        {
+            return false;
+        }
+
+        foreach (var mediaType in operation.RequestBody.Content.Values)
+        {
+            var schema = mediaType.Schema;
+            if (schema is null)
+            {
+                continue;
+            }
+
+            if (HasWeakSchemaValidation(schema, new HashSet<string>(StringComparer.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<SecurityIssue> GetWeakParameterIssues(
+        OpenApiPathItem pathItem,
+        OpenApiOperation operation,
+        string endpoint)
+    {
+        foreach (var parameter in MergeParameters(pathItem, operation))
+        {
+            var location = parameter.In;
+            if (location is not ParameterLocation.Query and not ParameterLocation.Path and not ParameterLocation.Header)
+            {
+                continue;
+            }
+
+            var locationLabel = location.Value.ToString().ToLowerInvariant();
+
+            if (location == ParameterLocation.Path && !parameter.Required)
+            {
+                yield return new SecurityIssue
+                {
+                    RuleCode = RuleCodeValue,
+                    Severity = SeverityLevel.Medium,
+                    Endpoint = endpoint,
+                    Title = $"Paramètre {locationLabel} mal défini",
+                    Description = $"Le paramètre '{parameter.Name}' doit être obligatoire et définir des contraintes de validation adaptées.",
+                    Recommendation = $"Marquer '{parameter.Name}' comme required et ajouter des contraintes OpenAPI (pattern, enum, min/max, minLength/maxLength).",
+                    OwaspCategory = "Improper Input Validation"
+                };
+
+                continue;
+            }
+
+            if (parameter.Schema is null)
+            {
+                continue;
+            }
+
+            if (!HasWeakParameterValidation(parameter))
+            {
+                continue;
+            }
+
+            yield return new SecurityIssue
+            {
+                RuleCode = RuleCodeValue,
+                Severity = SeverityLevel.Medium,
+                Endpoint = endpoint,
+                Title = $"Paramètre {locationLabel} peu contraint",
+                Description = $"Le paramètre '{parameter.Name}' n'expose pas assez de contraintes de validation dans sa définition OpenAPI.",
+                Recommendation = $"Ajouter des contraintes OpenAPI sur '{parameter.Name}' ({locationLabel}) : min/max, minLength/maxLength, pattern, enum, format.",
+                OwaspCategory = "Improper Input Validation"
+            };
+        }
+    }
+
+    private static IEnumerable<OpenApiParameter> MergeParameters(OpenApiPathItem pathItem, OpenApiOperation operation)
+    {
+        var merged = new Dictionary<(string Name, ParameterLocation? Location), OpenApiParameter>();
+
+        foreach (var parameter in pathItem.Parameters)
+        {
+            merged[(parameter.Name, parameter.In)] = parameter;
+        }
+
+        foreach (var parameter in operation.Parameters)
+        {
+            merged[(parameter.Name, parameter.In)] = parameter;
+        }
+
+        return merged.Values;
+    }
+
+    private static bool HasWeakParameterValidation(OpenApiParameter parameter)
+    {
+        var schema = parameter.Schema;
+        if (schema is null)
+        {
+            return false;
+        }
+
+        return !HasAnySchemaConstraint(schema) || HasWeakSchemaValidation(schema, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static bool HasWeakSchemaValidation(OpenApiSchema schema, HashSet<string> visitedRefs)
     {
         if (schema.Reference?.Id is { Length: > 0 } referenceId)
         {
@@ -76,20 +165,12 @@ public class WeakInputValidationRule : ISecurityRule
 
         foreach (var property in schema.Properties.Values)
         {
-            var hasAnyConstraint =
-                property.MinLength.HasValue ||
-                property.MaxLength.HasValue ||
-                property.Pattern is { Length: > 0 } ||
-                property.Minimum.HasValue ||
-                property.Maximum.HasValue ||
-                property.Format is { Length: > 0 };
-
-            if (!hasAnyConstraint)
+            if (!HasAnySchemaConstraint(property))
             {
                 return true;
             }
 
-            if (HasWeakValidation(property, visitedRefs))
+            if (HasWeakSchemaValidation(property, visitedRefs))
             {
                 return true;
             }
@@ -100,19 +181,38 @@ public class WeakInputValidationRule : ISecurityRule
             return true;
         }
 
-        if (schema.Items is not null && HasWeakValidation(schema.Items, visitedRefs))
+        if (schema.Items is not null && HasWeakSchemaValidation(schema.Items, visitedRefs))
         {
             return true;
         }
 
         foreach (var composite in schema.AllOf.Concat(schema.AnyOf).Concat(schema.OneOf))
         {
-            if (HasWeakValidation(composite, visitedRefs))
+            if (HasWeakSchemaValidation(composite, visitedRefs))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private static bool HasAnySchemaConstraint(OpenApiSchema schema)
+    {
+        return schema.MinLength.HasValue ||
+               schema.MaxLength.HasValue ||
+               schema.Pattern is { Length: > 0 } ||
+               schema.Minimum.HasValue ||
+               schema.Maximum.HasValue ||
+               schema.ExclusiveMinimum == true ||
+               schema.ExclusiveMaximum == true ||
+               schema.MultipleOf.HasValue ||
+               schema.Format is { Length: > 0 } ||
+               schema.Enum.Count > 0 ||
+               schema.MinItems.HasValue ||
+               schema.MaxItems.HasValue ||
+               schema.UniqueItems == true ||
+               schema.MinProperties.HasValue ||
+               schema.MaxProperties.HasValue;
     }
 }
