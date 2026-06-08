@@ -19,6 +19,62 @@
       </div>
     </div>
 
+    <div class="mt-6 grid gap-3 rounded-2xl border border-cyan-800/70 bg-[#04314e]/70 p-4 md:grid-cols-2 xl:grid-cols-5">
+      <label class="flex flex-col gap-2 text-sm text-cyan-100/85 xl:col-span-2">
+        <span>Recherche</span>
+        <input
+          v-model.trim="searchQuery"
+          type="text"
+          placeholder="endpoint, règle, OWASP, recommandation..."
+          class="h-11 rounded-xl border border-cyan-800 bg-[#032a45] px-4 text-cyan-50 outline-none transition placeholder:text-cyan-200/45 focus:border-accent"
+        >
+      </label>
+
+      <label class="flex flex-col gap-2 text-sm text-cyan-100/85">
+        <span>Sévérité</span>
+        <select
+          v-model="severityFilter"
+          class="h-11 rounded-xl border border-cyan-800 bg-[#032a45] px-4 text-cyan-50 outline-none transition focus:border-accent"
+        >
+          <option value="">Toutes</option>
+          <option v-for="severity in severities" :key="severity" :value="severity">{{ severity }}</option>
+        </select>
+      </label>
+
+      <label class="flex flex-col gap-2 text-sm text-cyan-100/85">
+        <span>Confiance</span>
+        <select
+          v-model="confidenceFilter"
+          class="h-11 rounded-xl border border-cyan-800 bg-[#032a45] px-4 text-cyan-50 outline-none transition focus:border-accent"
+        >
+          <option value="">Toutes</option>
+          <option v-for="confidence in confidences" :key="confidence" :value="confidence">{{ confidence }}</option>
+        </select>
+      </label>
+
+      <label class="flex flex-col gap-2 text-sm text-cyan-100/85">
+        <span>OWASP</span>
+        <select
+          v-model="owaspFilter"
+          class="h-11 rounded-xl border border-cyan-800 bg-[#032a45] px-4 text-cyan-50 outline-none transition focus:border-accent"
+        >
+          <option value="">Tous</option>
+          <option v-for="option in owaspOptions" :key="option" :value="option">{{ option }}</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="mt-3 flex flex-col gap-3 text-sm text-cyan-100/80 lg:flex-row lg:items-center lg:justify-between">
+      <p>{{ filteredIssues.length }} faille(s) sur {{ props.issues.length }} affichée(s)</p>
+      <button
+        class="inline-flex h-10 items-center justify-center rounded-xl border border-cyan-700 px-4 text-cyan-100 transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+        :disabled="!hasActiveFilters"
+        @click="resetFilters"
+      >
+        Réinitialiser les filtres
+      </button>
+    </div>
+
     <div v-if="viewMode === 'detail'" class="mt-6 overflow-x-auto rounded-2xl border border-cyan-800/70">
       <table class="w-full min-w-[1240px] text-left text-lg">
         <thead class="bg-[#04314e]">
@@ -49,6 +105,9 @@
           </tr>
         </tbody>
       </table>
+      <div v-if="sortedIssues.length === 0" class="px-6 py-8 text-sm text-cyan-100/75">
+        Aucun finding ne correspond aux filtres sélectionnés.
+      </div>
     </div>
 
     <div v-else-if="viewMode === 'owasp'" class="mt-6 overflow-x-auto rounded-2xl border border-cyan-800/70">
@@ -74,6 +133,9 @@
           </tr>
         </tbody>
       </table>
+      <div v-if="owaspGroups.length === 0" class="px-6 py-8 text-sm text-cyan-100/75">
+        Aucun regroupement OWASP ne correspond aux filtres sélectionnés.
+      </div>
     </div>
 
     <div v-else class="mt-6 overflow-x-auto rounded-2xl border border-cyan-800/70">
@@ -99,26 +161,78 @@
           </tr>
         </tbody>
       </table>
+      <div v-if="endpointGroups.length === 0" class="px-6 py-8 text-sm text-cyan-100/75">
+        Aucun regroupement endpoint ne correspond aux filtres sélectionnés.
+      </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { SecurityIssue } from '../types/scan'
+import type { DetectionConfidence, SecurityIssue, Severity } from '../types/scan'
 import { groupIssuesByEndpoint, groupIssuesByOwasp, owaspLabel, sortIssues } from '../utils/issuePresentation'
 
 const props = defineProps<{ issues: SecurityIssue[] }>()
 const viewMode = ref<'detail' | 'owasp' | 'endpoint'>('detail')
+const searchQuery = ref('')
+const severityFilter = ref<Severity | ''>('')
+const confidenceFilter = ref<DetectionConfidence | ''>('')
+const owaspFilter = ref('')
 const viewModes = [
   { key: 'detail', label: 'Détail' },
   { key: 'owasp', label: 'Par OWASP' },
   { key: 'endpoint', label: 'Par endpoint' }
 ] as const
 
-const sortedIssues = computed(() => sortIssues(props.issues))
-const owaspGroups = computed(() => groupIssuesByOwasp(props.issues))
-const endpointGroups = computed(() => groupIssuesByEndpoint(props.issues))
+const severities: Severity[] = ['Critical', 'High', 'Medium', 'Low']
+const confidences: DetectionConfidence[] = ['High', 'Medium', 'Low']
+
+const owaspOptions = computed(() => {
+  return [...new Set(props.issues.map(issue => owaspLabel(issue)))].sort((left, right) => left.localeCompare(right, 'fr'))
+})
+
+const filteredIssues = computed(() => {
+  const query = normalize(searchQuery.value)
+
+  return props.issues.filter(issue => {
+    if (severityFilter.value && issue.severity !== severityFilter.value) {
+      return false
+    }
+
+    if (confidenceFilter.value && issue.detectionConfidence !== confidenceFilter.value) {
+      return false
+    }
+
+    const issueOwaspLabel = owaspLabel(issue)
+    if (owaspFilter.value && issueOwaspLabel !== owaspFilter.value) {
+      return false
+    }
+
+    if (!query) {
+      return true
+    }
+
+    const haystack = [
+      issue.ruleCode,
+      issue.endpoint,
+      issue.title,
+      issue.description,
+      issue.recommendation,
+      issue.openApiLocation,
+      issueOwaspLabel
+    ]
+      .join(' ')
+      .toLowerCase()
+
+    return haystack.includes(query)
+  })
+})
+
+const sortedIssues = computed(() => sortIssues(filteredIssues.value))
+const owaspGroups = computed(() => groupIssuesByOwasp(filteredIssues.value))
+const endpointGroups = computed(() => groupIssuesByEndpoint(filteredIssues.value))
+const hasActiveFilters = computed(() => Boolean(searchQuery.value || severityFilter.value || confidenceFilter.value || owaspFilter.value))
 
 function severityClass(severity: SecurityIssue['severity']): string {
   if (severity === 'Critical') return 'border-critical/50 text-critical bg-critical/10'
@@ -131,5 +245,16 @@ function confidenceClass(confidence: SecurityIssue['detectionConfidence']): stri
   if (confidence === 'High') return 'border-safe/50 text-safe bg-safe/10'
   if (confidence === 'Medium') return 'border-warning/50 text-warning bg-warning/10'
   return 'border-cyan-500/50 text-cyan-200 bg-cyan-500/10'
+}
+
+function resetFilters() {
+  searchQuery.value = ''
+  severityFilter.value = ''
+  confidenceFilter.value = ''
+  owaspFilter.value = ''
+}
+
+function normalize(value: string): string {
+  return value.trim().toLowerCase()
 }
 </script>
