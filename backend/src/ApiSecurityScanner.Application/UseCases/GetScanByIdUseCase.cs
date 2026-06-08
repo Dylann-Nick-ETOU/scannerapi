@@ -28,22 +28,7 @@ public class GetScanByIdUseCase(IScanRepository scanRepository)
                 Medium = issues.Count(x => x.Severity == SeverityLevel.Medium),
                 Low = issues.Count(x => x.Severity == SeverityLevel.Low)
             },
-            Issues = issues.Select(x => new SecurityIssueDto
-            {
-                RuleCode = x.RuleCode,
-                Severity = x.Severity.ToString(),
-                DetectionConfidence = x.DetectionConfidence,
-                Endpoint = x.Endpoint,
-                OpenApiLocation = x.OpenApiLocation,
-                OpenApiExcerpt = x.OpenApiExcerpt,
-                Title = x.Title,
-                Description = x.Description,
-                Recommendation = x.Recommendation,
-                OwaspCategory = x.OwaspCategory,
-                OwaspTop10Id = x.OwaspTop10Id,
-                OwaspTop10Version = x.OwaspTop10Version,
-                OwaspTop10Title = x.OwaspTop10Title
-            }).ToList()
+            Issues = issues.Select(x => x.ToDto()).ToList()
         };
     }
 }

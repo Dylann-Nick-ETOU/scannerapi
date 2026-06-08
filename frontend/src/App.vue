@@ -93,7 +93,12 @@
               <ScoreCard :score="report.score" />
               <IssuesSummary :summary="report.summary" />
             </div>
-            <IssuesTable :issues="report.issues" />
+            <IssuesTable
+              :scan-id="report.scanId"
+              :issues="report.issues"
+              @issue-updated="handleIssueUpdated"
+              @action-error="handleIssueActionError"
+            />
           </template>
           <p v-else class="text-cyan-100/80">Aucun rapport chargé. Lancez un scan depuis la page Scanner.</p>
         </section>
@@ -147,7 +152,7 @@ import ScanForm from './components/ScanForm.vue'
 import ScanHistorySection from './components/ScanHistorySection.vue'
 import ScoreCard from './components/ScoreCard.vue'
 import { clearAccessToken, deactivateUser, deleteScan, exportScanJson, getAccessToken, getAdminUsers, getScanById, getScans, login, readStoredAuthState, register, scanFromFile, scanFromUrl } from './services/scanApi'
-import type { AdminUserActivity, AuthResponse, RegisterRequest, ScanHistoryItem, ScanReport } from './types/scan'
+import type { AdminUserActivity, AuthResponse, RegisterRequest, ScanHistoryItem, ScanReport, SecurityIssue } from './types/scan'
 
 type Page = 'accueil' | 'connexion' | 'scanner' | 'rapport' | 'historique' | 'admin' | 'avant-apres' | 'recommandations'
 
@@ -360,6 +365,21 @@ async function handleDeleteScan(id: string) {
     error.value = extractApiError(err, 'Impossible de supprimer ce scan.')
     console.error(err)
   }
+}
+
+function handleIssueUpdated(updatedIssue: SecurityIssue) {
+  if (!report.value) {
+    return
+  }
+
+  report.value = {
+    ...report.value,
+    issues: report.value.issues.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue)
+  }
+}
+
+function handleIssueActionError(message: string) {
+  error.value = message
 }
 
 function extractApiError(err: unknown, fallback: string): string {

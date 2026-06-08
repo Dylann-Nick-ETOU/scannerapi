@@ -175,7 +175,6 @@ using (var scope = app.Services.CreateScope())
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseForwardedHeaders();
 app.UseCors("Frontend");
-app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
@@ -185,6 +184,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/api/health");
@@ -308,6 +308,14 @@ static void EnsureSecurityIssueColumns(NpgsqlConnection connection, Microsoft.Ex
     command.CommandText = """
         ALTER TABLE "SecurityIssues"
         ADD COLUMN IF NOT EXISTS "DetectionConfidence" character varying(20) NOT NULL DEFAULT '';
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "ReviewStatus" character varying(30) NOT NULL DEFAULT 'Open';
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "ReviewComment" character varying(1000) NOT NULL DEFAULT '';
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "ReviewedAt" timestamp with time zone NULL;
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "ReviewedBy" character varying(100) NOT NULL DEFAULT '';
         ALTER TABLE "SecurityIssues"
         ADD COLUMN IF NOT EXISTS "OpenApiLocation" character varying(1200) NOT NULL DEFAULT '';
         ALTER TABLE "SecurityIssues"

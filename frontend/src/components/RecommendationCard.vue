@@ -49,10 +49,12 @@ import { owaspLabel, sortIssues } from '../utils/issuePresentation'
 
 const props = defineProps<{ issues: SecurityIssue[] }>()
 const orderedIssues = computed(() => sortIssues(props.issues))
-const topIssue = computed(() => orderedIssues.value[0])
+const actionableIssues = computed(() => orderedIssues.value.filter(issue => issue.reviewStatus === 'Open'))
+const topIssue = computed(() => actionableIssues.value[0] ?? orderedIssues.value[0])
 const recommendations = computed(() => {
   const defaults = ['Ajouter JWT/OAuth2', 'Valider toutes les entrées', 'Masquer les champs sensibles', 'Centraliser la gestion des erreurs', 'Activer HTTPS', 'Journaliser les événements importants']
-  const fromIssues = orderedIssues.value.map(x => x.recommendation)
+  const source = actionableIssues.value.length > 0 ? actionableIssues.value : orderedIssues.value
+  const fromIssues = source.map(x => x.recommendation)
   return [...new Set([...fromIssues, ...defaults])].slice(0, 6)
 })
 function iconFor(text: string): string {

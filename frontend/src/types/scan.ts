@@ -1,5 +1,6 @@
 export type Severity = 'Low' | 'Medium' | 'High' | 'Critical'
 export type DetectionConfidence = 'Low' | 'Medium' | 'High'
+export type ReviewStatus = 'Open' | 'AcceptedRisk' | 'FalsePositive'
 
 export interface LoginRequest {
   username: string
@@ -26,9 +27,14 @@ export interface ScanRequest {
 }
 
 export interface SecurityIssue {
+  id: string
   ruleCode: string
   severity: Severity
   detectionConfidence: DetectionConfidence
+  reviewStatus: ReviewStatus
+  reviewComment: string
+  reviewedAt?: string | null
+  reviewedBy: string
   endpoint: string
   openApiLocation: string
   openApiExcerpt: string
@@ -54,6 +60,11 @@ export interface ScanReport {
   score: number
   summary: ScanSummary
   issues: SecurityIssue[]
+}
+
+export interface UpdateIssueReviewRequest {
+  status: ReviewStatus
+  comment?: string
 }
 
 export interface ScanHistoryItem {

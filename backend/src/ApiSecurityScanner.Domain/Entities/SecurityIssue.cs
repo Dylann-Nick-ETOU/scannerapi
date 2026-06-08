@@ -9,6 +9,10 @@ public class SecurityIssue
     public string RuleCode { get; set; } = string.Empty;
     public SeverityLevel Severity { get; set; }
     public string DetectionConfidence { get; set; } = string.Empty;
+    public string ReviewStatus { get; set; } = SecurityIssueReviewStatuses.Open;
+    public string ReviewComment { get; set; } = string.Empty;
+    public DateTime? ReviewedAt { get; set; }
+    public string ReviewedBy { get; set; } = string.Empty;
     public string Endpoint { get; set; } = string.Empty;
     public string OpenApiLocation { get; set; } = string.Empty;
     public string OpenApiExcerpt { get; set; } = string.Empty;

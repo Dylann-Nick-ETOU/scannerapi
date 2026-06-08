@@ -1,4 +1,4 @@
-import type { DetectionConfidence, SecurityIssue, Severity } from '../types/scan'
+import type { DetectionConfidence, ReviewStatus, SecurityIssue, Severity } from '../types/scan'
 
 export interface IssueGroup {
   key: string
@@ -25,8 +25,19 @@ const confidenceOrder: Record<DetectionConfidence, number> = {
   Low: 1
 }
 
+const reviewStatusOrder: Record<ReviewStatus, number> = {
+  Open: 3,
+  AcceptedRisk: 2,
+  FalsePositive: 1
+}
+
 export function sortIssues(issues: SecurityIssue[]): SecurityIssue[] {
   return [...issues].sort((left, right) => {
+    const reviewDelta = reviewStatusRank(right.reviewStatus) - reviewStatusRank(left.reviewStatus)
+    if (reviewDelta !== 0) {
+      return reviewDelta
+    }
+
     const severityDelta = confidenceAwareSeverityRank(right) - confidenceAwareSeverityRank(left)
     if (severityDelta !== 0) {
       return severityDelta
@@ -68,6 +79,16 @@ export function severityRank(severity: Severity): number {
 
 export function confidenceRank(confidence: DetectionConfidence): number {
   return confidenceOrder[confidence]
+}
+
+export function reviewStatusRank(status: ReviewStatus): number {
+  return reviewStatusOrder[status]
+}
+
+export function reviewStatusLabel(status: ReviewStatus): string {
+  if (status === 'AcceptedRisk') return 'Risque accepté'
+  if (status === 'FalsePositive') return 'Faux positif'
+  return 'Ouvert'
 }
 
 function confidenceAwareSeverityRank(issue: SecurityIssue): number {
