@@ -17,6 +17,7 @@ public static class DependencyInjection
         services.AddScoped<ISecurityRule, SensitiveDataExposureRule>();
         services.AddScoped<ISecurityRule, MassAssignmentRule>();
         services.AddScoped<ISecurityRule, WeakInputValidationRule>();
+        services.AddScoped<ISecurityRule, InventoryManagementRule>();
         services.AddScoped<ISecurityRule, InsecureServerUrlRule>();
 
         services.AddScoped<SecurityRuleEngine>();
