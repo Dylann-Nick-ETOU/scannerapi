@@ -111,6 +111,7 @@
             :error="adminError"
             @refresh="loadAdminUsers"
             @deactivate="handleDeactivateUser"
+            @reactivate="handleReactivateUser"
           />
         </section>
 
@@ -162,7 +163,7 @@ import RecommendationCard from './components/RecommendationCard.vue'
 import ScanForm from './components/ScanForm.vue'
 import ScanHistorySection from './components/ScanHistorySection.vue'
 import ScoreCard from './components/ScoreCard.vue'
-import { clearAccessToken, compareScans, deactivateUser, deleteScan, exportScanJson, getAccessToken, getAdminUsers, getScanById, getScans, login, readStoredAuthState, register, scanFromFile, scanFromUrl } from './services/scanApi'
+import { clearAccessToken, compareScans, deactivateUser, deleteScan, exportScanJson, getAccessToken, getAdminUsers, getScanById, getScans, login, reactivateUser, readStoredAuthState, register, scanFromFile, scanFromUrl } from './services/scanApi'
 import type { AdminUserActivity, AuthResponse, RegisterRequest, ScanComparison, ScanHistoryItem, ScanReport, SecurityIssue } from './types/scan'
 
 type Page = 'accueil' | 'connexion' | 'scanner' | 'rapport' | 'historique' | 'admin' | 'avant-apres' | 'recommandations'
@@ -311,6 +312,16 @@ async function handleDeactivateUser(username: string) {
     await loadAdminUsers()
   } catch (err: unknown) {
     adminError.value = extractApiError(err, 'Impossible de désactiver cet utilisateur.')
+    console.error(err)
+  }
+}
+
+async function handleReactivateUser(username: string) {
+  try {
+    await reactivateUser(username)
+    await loadAdminUsers()
+  } catch (err: unknown) {
+    adminError.value = extractApiError(err, 'Impossible de réactiver cet utilisateur.')
     console.error(err)
   }
 }

@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<CompareScansUseCase>();
         services.AddScoped<GetAdminUserActivityUseCase>();
         services.AddScoped<DeactivateUserUseCase>();
+        services.AddScoped<ReactivateUserUseCase>();
         services.AddScoped<DeleteScanUseCase>();
         services.AddScoped<UpdateSecurityIssueReviewUseCase>();
         services.AddScoped<IValidator<DTOs.ScanRequestDto>, ScanRequestDtoValidator>();

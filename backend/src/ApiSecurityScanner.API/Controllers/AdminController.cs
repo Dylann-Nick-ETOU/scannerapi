@@ -10,7 +10,8 @@ namespace ApiSecurityScanner.API.Controllers;
 [Route("api/[controller]")]
 public class AdminController(
     GetAdminUserActivityUseCase getAdminUserActivityUseCase,
-    DeactivateUserUseCase deactivateUserUseCase) : ControllerBase
+    DeactivateUserUseCase deactivateUserUseCase,
+    ReactivateUserUseCase reactivateUserUseCase) : ControllerBase
 {
     [HttpGet("users")]
     public async Task<ActionResult<IReadOnlyList<AdminUserActivityDto>>> GetUsers(CancellationToken cancellationToken)
@@ -24,6 +25,18 @@ public class AdminController(
     {
         var deactivated = await deactivateUserUseCase.ExecuteAsync(username, cancellationToken);
         if (!deactivated)
+        {
+            return NotFound(new { message = "User not found." });
+        }
+
+        return NoContent();
+    }
+
+    [HttpPost("users/{username}/reactivate")]
+    public async Task<IActionResult> ReactivateUser(string username, CancellationToken cancellationToken)
+    {
+        var reactivated = await reactivateUserUseCase.ExecuteAsync(username, cancellationToken);
+        if (!reactivated)
         {
             return NotFound(new { message = "User not found." });
         }

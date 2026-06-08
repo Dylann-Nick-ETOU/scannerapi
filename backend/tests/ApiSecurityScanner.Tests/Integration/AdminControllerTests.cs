@@ -75,6 +75,27 @@ public class AdminControllerTests(ApiSecurityScannerApiFactory factory) : IClass
         db.AppUsers.Single(x => x.Username == "member").IsActive.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task ReactivateUser_ShouldEnableAccount_ForAdmin()
+    {
+        using var scope = factory.Services.CreateScope();
+        var seededDb = scope.ServiceProvider.GetRequiredService<ApiSecurityScannerDbContext>();
+        seededDb.AppUsers.Single(x => x.Username == "member").IsActive = false;
+        await seededDb.SaveChangesAsync();
+
+        using var client = CreateClient();
+        client.DefaultRequestHeaders.Add("X-Test-User", "admin");
+        client.DefaultRequestHeaders.Add("X-Test-Role", "Admin");
+
+        var response = await client.PostAsync("/api/admin/users/member/reactivate", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        using var verificationScope = factory.Services.CreateScope();
+        var db = verificationScope.ServiceProvider.GetRequiredService<ApiSecurityScannerDbContext>();
+        db.AppUsers.Single(x => x.Username == "member").IsActive.Should().BeTrue();
+    }
+
     private HttpClient CreateClient()
     {
         return factory.CreateClient(new()

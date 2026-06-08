@@ -166,3 +166,7 @@ export async function getAdminUsers(): Promise<AdminUserActivity[]> {
 export async function deactivateUser(username: string): Promise<void> {
   await scanApi.post(`/admin/users/${encodeURIComponent(username)}/deactivate`)
 }
+
+export async function reactivateUser(username: string): Promise<void> {
+  await scanApi.post(`/admin/users/${encodeURIComponent(username)}/reactivate`)
+}
