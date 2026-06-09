@@ -3,23 +3,20 @@ using ApiSecurityScanner.Domain.Interfaces;
 
 namespace ApiSecurityScanner.Application.UseCases;
 
-public class CompareScansUseCase(IScanRepository scanRepository)
+public class CompareAdminScansUseCase(IScanRepository scanRepository)
 {
     public async Task<ScanComparisonDto?> ExecuteAsync(
         Guid currentScanId,
         Guid baselineScanId,
-        string ownerId,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
-
-        var currentScan = await scanRepository.GetWithIssuesForOwnerAsync(currentScanId, ownerId, cancellationToken);
+        var currentScan = await scanRepository.GetWithIssuesAsync(currentScanId, cancellationToken);
         if (currentScan is null)
         {
             return null;
         }
 
-        var baselineScan = await scanRepository.GetWithIssuesForOwnerAsync(baselineScanId, ownerId, cancellationToken);
+        var baselineScan = await scanRepository.GetWithIssuesAsync(baselineScanId, cancellationToken);
         if (baselineScan is null)
         {
             return null;

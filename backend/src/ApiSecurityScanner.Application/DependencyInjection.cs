@@ -26,7 +26,9 @@ public static class DependencyInjection
         services.AddScoped<ScanOpenApiFileUseCase>();
         services.AddScoped<GetAllScansUseCase>();
         services.AddScoped<GetScanByIdUseCase>();
+        services.AddScoped<GetAdminScanByIdUseCase>();
         services.AddScoped<CompareScansUseCase>();
+        services.AddScoped<CompareAdminScansUseCase>();
         services.AddScoped<GetAdminUserActivityUseCase>();
         services.AddScoped<DeactivateUserUseCase>();
         services.AddScoped<ReactivateUserUseCase>();

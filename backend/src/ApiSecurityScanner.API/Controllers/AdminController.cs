@@ -10,6 +10,8 @@ namespace ApiSecurityScanner.API.Controllers;
 [Route("api/[controller]")]
 public class AdminController(
     GetAdminUserActivityUseCase getAdminUserActivityUseCase,
+    GetAdminScanByIdUseCase getAdminScanByIdUseCase,
+    CompareAdminScansUseCase compareAdminScansUseCase,
     DeactivateUserUseCase deactivateUserUseCase,
     ReactivateUserUseCase reactivateUserUseCase) : ControllerBase
 {
@@ -18,6 +20,33 @@ public class AdminController(
     {
         var users = await getAdminUserActivityUseCase.ExecuteAsync(cancellationToken);
         return Ok(users);
+    }
+
+    [HttpGet("scans/{id:guid}")]
+    public async Task<ActionResult<ScanReportDto>> GetScanById(Guid id, CancellationToken cancellationToken)
+    {
+        var scan = await getAdminScanByIdUseCase.ExecuteAsync(id, cancellationToken);
+        if (scan is null)
+        {
+            return NotFound(new { message = "Scan not found." });
+        }
+
+        return Ok(scan);
+    }
+
+    [HttpGet("scans/{currentScanId:guid}/compare/{baselineScanId:guid}")]
+    public async Task<ActionResult<ScanComparisonDto>> CompareScans(
+        Guid currentScanId,
+        Guid baselineScanId,
+        CancellationToken cancellationToken)
+    {
+        var comparison = await compareAdminScansUseCase.ExecuteAsync(currentScanId, baselineScanId, cancellationToken);
+        if (comparison is null)
+        {
+            return NotFound(new { message = "One or both scans were not found." });
+        }
+
+        return Ok(comparison);
     }
 
     [HttpPost("users/{username}/deactivate")]

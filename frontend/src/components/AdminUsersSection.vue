@@ -128,6 +128,7 @@
                           <th class="px-3 py-2">Issues</th>
                           <th class="px-3 py-2">Statut</th>
                           <th class="px-3 py-2">Date</th>
+                          <th class="px-3 py-2 text-right">Action</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -137,6 +138,20 @@
                           <td class="px-3 py-2">{{ scan.issuesCount }}</td>
                           <td class="px-3 py-2">{{ scan.status }}</td>
                           <td class="px-3 py-2">{{ formatDate(scan.createdAt) }}</td>
+                          <td class="px-3 py-2 text-right">
+                    <button
+                      class="rounded border border-cyan-700 px-3 py-1 text-cyan-100 hover:border-accent hover:text-accent"
+                      @click="$emit('view-scan', scan.id, item.username)"
+                    >
+                      Voir le rapport
+                    </button>
+                    <button
+                      class="rounded border border-cyan-700 px-3 py-1 text-cyan-100 hover:border-safe hover:text-safe"
+                      @click="$emit('compare-scan', scan.id, item.username, item.scans)"
+                    >
+                      Comparer
+                    </button>
+                          </td>
                         </tr>
                       </tbody>
                     </table>
@@ -165,6 +180,8 @@ defineEmits<{
   refresh: []
   deactivate: [username: string]
   reactivate: [username: string]
+  'view-scan': [scanId: string, username: string]
+  'compare-scan': [scanId: string, username: string, scans: AdminUserActivity['scans']]
 }>()
 
 const expandedUser = ref<string | null>(null)

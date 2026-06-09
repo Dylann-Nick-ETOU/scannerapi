@@ -4,6 +4,7 @@
       <div>
         <h3 class="text-2xl font-semibold">Avant / Après</h3>
         <p class="mt-2 text-cyan-100/80">Comparez deux scans pour voir ce qui a été corrigé et ce qui reste exposé.</p>
+        <p v-if="contextLabel" class="mt-2 text-sm text-cyan-100/65">{{ contextLabel }}</p>
       </div>
       <div class="text-sm text-cyan-100/70">
         Matching strict: <span class="font-mono text-cyan-50">RuleCode + Endpoint + OpenApiLocation</span>
@@ -240,6 +241,7 @@ const props = defineProps<{
   error?: string
   currentScanId?: string | null
   baselineScanId?: string | null
+  contextLabel?: string
 }>()
 
 const emit = defineEmits<{

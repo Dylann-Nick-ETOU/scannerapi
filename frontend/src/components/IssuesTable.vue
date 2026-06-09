@@ -136,7 +136,7 @@
               </td>
               <td class="px-4 py-4 text-cyan-100/90">{{ issue.recommendation }}</td>
               <td class="px-4 py-4">
-                <div class="flex min-w-[220px] flex-col gap-2">
+                <div v-if="props.reviewEnabled !== false" class="flex min-w-[220px] flex-col gap-2">
                   <button
                     class="rounded-lg border px-3 py-2 text-sm transition"
                     :class="issue.reviewStatus === 'AcceptedRisk' ? 'border-accent bg-accent/15 text-accent' : 'border-cyan-700 text-cyan-100 hover:border-accent hover:text-accent'"
@@ -161,10 +161,11 @@
                     Rouvrir
                   </button>
                 </div>
+                <span v-else class="text-sm text-cyan-100/60">Lecture seule</span>
               </td>
             </tr>
 
-            <tr v-if="reviewDraft?.issueId === issue.id" class="border-b border-cyan-900/70 bg-[#02263d]/80">
+            <tr v-if="props.reviewEnabled !== false && reviewDraft?.issueId === issue.id" class="border-b border-cyan-900/70 bg-[#02263d]/80">
               <td colspan="10" class="px-4 py-4">
                 <div class="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
                   <label class="flex flex-col gap-2 text-sm text-cyan-100/85">
@@ -274,6 +275,7 @@ const props = defineProps<{
   scanId: string
   issues: SecurityIssue[]
   focusedIssueId?: string | null
+  reviewEnabled?: boolean
 }>()
 
 const emit = defineEmits<{

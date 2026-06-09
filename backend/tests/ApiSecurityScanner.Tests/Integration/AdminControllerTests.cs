@@ -27,6 +27,13 @@ public class AdminControllerTests(ApiSecurityScannerApiFactory factory) : IClass
             Score = 72,
             Status = Domain.Enums.ScanStatus.Completed
         });
+        db.Scans.Add(new Scan
+        {
+            OwnerId = "member",
+            TargetName = "member-api-v2",
+            Score = 85,
+            Status = Domain.Enums.ScanStatus.Completed
+        });
         await db.SaveChangesAsync();
     }
 
@@ -57,6 +64,58 @@ public class AdminControllerTests(ApiSecurityScannerApiFactory factory) : IClass
         var payload = await response.Content.ReadAsStringAsync();
         payload.Should().Contain("member");
         payload.Should().Contain("member-api");
+    }
+
+    [Fact]
+    public async Task GetScanById_ShouldReturnUserScanReport_ForAdmin()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiSecurityScannerDbContext>();
+        var scanId = db.Scans.Single(x => x.TargetName == "member-api").Id;
+
+        using var client = CreateClient();
+        client.DefaultRequestHeaders.Add("X-Test-User", "admin");
+        client.DefaultRequestHeaders.Add("X-Test-Role", "Admin");
+
+        var response = await client.GetAsync($"/api/admin/scans/{scanId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var payload = await response.Content.ReadAsStringAsync();
+        payload.Should().Contain(scanId.ToString());
+        payload.Should().Contain("\"score\":72");
+    }
+
+    [Fact]
+    public async Task GetScanById_ShouldReturnNotFound_WhenScanDoesNotExist()
+    {
+        using var client = CreateClient();
+        client.DefaultRequestHeaders.Add("X-Test-User", "admin");
+        client.DefaultRequestHeaders.Add("X-Test-Role", "Admin");
+
+        var response = await client.GetAsync($"/api/admin/scans/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task CompareScans_ShouldReturnComparison_ForAdmin()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiSecurityScannerDbContext>();
+        var baselineScanId = db.Scans.Single(x => x.TargetName == "member-api").Id;
+        var currentScanId = db.Scans.Single(x => x.TargetName == "member-api-v2").Id;
+
+        using var client = CreateClient();
+        client.DefaultRequestHeaders.Add("X-Test-User", "admin");
+        client.DefaultRequestHeaders.Add("X-Test-Role", "Admin");
+
+        var response = await client.GetAsync($"/api/admin/scans/{currentScanId}/compare/{baselineScanId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var payload = await response.Content.ReadAsStringAsync();
+        payload.Should().Contain(currentScanId.ToString());
+        payload.Should().Contain(baselineScanId.ToString());
+        payload.Should().Contain("\"scoreDelta\":13");
     }
 
     [Fact]

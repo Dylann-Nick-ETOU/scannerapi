@@ -139,8 +139,18 @@ export async function getScanById(id: string): Promise<ScanReport> {
   return data
 }
 
+export async function getAdminScanById(id: string): Promise<ScanReport> {
+  const { data } = await scanApi.get<ScanReport>(`/admin/scans/${id}`)
+  return data
+}
+
 export async function compareScans(currentScanId: string, baselineScanId: string): Promise<ScanComparison> {
   const { data } = await scanApi.get<ScanComparison>(`/scans/${currentScanId}/compare/${baselineScanId}`)
+  return data
+}
+
+export async function compareAdminScans(currentScanId: string, baselineScanId: string): Promise<ScanComparison> {
+  const { data } = await scanApi.get<ScanComparison>(`/admin/scans/${currentScanId}/compare/${baselineScanId}`)
   return data
 }
 
