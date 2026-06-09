@@ -50,16 +50,7 @@ public class ScanOpenApiFileUseCase(
                 Medium = issues.Count(x => x.Severity == SeverityLevel.Medium),
                 Low = issues.Count(x => x.Severity == SeverityLevel.Low)
             },
-            Issues = issues.Select(x => new SecurityIssueDto
-            {
-                RuleCode = x.RuleCode,
-                Severity = x.Severity.ToString(),
-                Endpoint = x.Endpoint,
-                Title = x.Title,
-                Description = x.Description,
-                Recommendation = x.Recommendation,
-                OwaspCategory = x.OwaspCategory
-            }).ToList()
+            Issues = issues.Select(x => x.ToDto()).ToList()
         };
     }
 }

@@ -1,7 +1,7 @@
 <template>
   <main class="grid-bg min-h-screen text-white">
     <header class="border-b border-cyan-900/70 bg-[#00213a]/70 backdrop-blur-sm">
-      <div class="mx-auto flex max-w-[1280px] items-center justify-between px-6 py-3 md:px-10">
+      <div class="mx-auto flex max-w-[1560px] items-center justify-between px-6 py-3 md:px-10 xl:px-12">
         <button class="flex items-center gap-3" @click="go('accueil')">
           <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-[#12384e] text-accent">🛡</div>
           <span class="text-2xl font-medium text-cyan-50">API Security Scanner</span>
@@ -50,7 +50,7 @@
         </div>
       </div>
 
-      <div v-if="authState" class="mx-auto max-w-[1280px] px-6 pb-3 md:hidden md:px-10">
+      <div v-if="authState" class="mx-auto max-w-[1560px] px-6 pb-3 md:hidden md:px-10 xl:px-12">
         <nav class="flex gap-2 overflow-x-auto rounded-2xl border border-cyan-800/60 bg-[#03243c]/70 p-1">
           <button
             v-for="item in navItems"
@@ -65,7 +65,7 @@
       </div>
     </header>
 
-    <div class="mx-auto flex w-full max-w-[1280px] flex-col gap-10 px-6 pb-14 pt-16 md:px-10 md:pt-20">
+    <div class="mx-auto flex w-full flex-col gap-10 px-6 pb-14 pt-16 md:px-10 md:pt-20 xl:px-12" :class="contentWidthClass">
       <Transition name="fade-slide" mode="out-in">
         <section v-if="page === 'accueil'" key="accueil">
           <HeroSection @start="go('scanner')" @demo="go('avant-apres')" />
@@ -81,8 +81,15 @@
 
         <section v-else-if="page === 'rapport'" key="rapport" class="space-y-6">
           <template v-if="report">
-            <div class="flex items-center justify-end">
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <p
+                v-if="reportAccessMode === 'admin'"
+                class="rounded-xl border border-cyan-800/70 bg-[#04314e]/70 px-4 py-3 text-sm text-cyan-100/80"
+              >
+                Consultation admin en lecture seule<span v-if="reportViewedForUsername"> du compte {{ reportViewedForUsername }}</span>.
+              </p>
               <button
+                v-if="reportAccessMode === 'owner'"
                 class="rounded-lg border border-cyan-700 px-4 py-2 text-sm text-cyan-100 hover:border-accent hover:text-accent"
                 @click="handleExportScan(report.scanId)"
               >
@@ -93,7 +100,14 @@
               <ScoreCard :score="report.score" />
               <IssuesSummary :summary="report.summary" />
             </div>
-            <IssuesTable :issues="report.issues" />
+            <IssuesTable
+              :scan-id="report.scanId"
+              :issues="report.issues"
+              :focused-issue-id="reportFocusedIssueId"
+              :review-enabled="reportAccessMode === 'owner'"
+              @issue-updated="handleIssueUpdated"
+              @action-error="handleIssueActionError"
+            />
           </template>
           <p v-else class="text-cyan-100/80">Aucun rapport chargé. Lancez un scan depuis la page Scanner.</p>
         </section>
@@ -101,10 +115,14 @@
         <section v-else-if="page === 'admin'" key="admin">
           <AdminUsersSection
             :items="adminUsers"
+            :audit-logs="adminAuditLogs"
             :loading="adminLoading"
             :error="adminError"
-            @refresh="loadAdminUsers"
+            @refresh="loadAdminConsole"
             @deactivate="handleDeactivateUser"
+            @reactivate="handleReactivateUser"
+            @view-scan="handleViewAdminUserScan"
+            @compare-scan="handlePrepareAdminComparison"
           />
         </section>
 
@@ -114,7 +132,17 @@
         </section>
 
         <section v-else-if="page === 'avant-apres'" key="avant-apres">
-          <BeforeAfterSection />
+          <BeforeAfterSection
+            :items="comparisonItems"
+            :comparison="comparison"
+            :loading="comparisonLoading"
+            :error="comparisonError"
+            :current-scan-id="comparisonCurrentScanId"
+            :baseline-scan-id="comparisonBaselineScanId"
+            :context-label="comparisonContextLabel"
+            @compare="handleCompareScans"
+            @open-issue="handleOpenIssueFromComparison"
+          />
         </section>
 
         <section v-else key="historique">
@@ -125,6 +153,7 @@
             @refresh="loadHistory"
             @view="handleViewScan"
             @export="handleExportScan"
+            @compare="prepareComparison"
             @remove="handleDeleteScan"
           />
         </section>
@@ -134,7 +163,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import axios from 'axios'
 import AdminUsersSection from './components/AdminUsersSection.vue'
 import AuthPage from './components/AuthPage.vue'
@@ -146,8 +175,8 @@ import RecommendationCard from './components/RecommendationCard.vue'
 import ScanForm from './components/ScanForm.vue'
 import ScanHistorySection from './components/ScanHistorySection.vue'
 import ScoreCard from './components/ScoreCard.vue'
-import { clearAccessToken, deactivateUser, deleteScan, exportScanJson, getAccessToken, getAdminUsers, getScanById, getScans, login, readStoredAuthState, register, scanFromFile, scanFromUrl } from './services/scanApi'
-import type { AdminUserActivity, AuthResponse, RegisterRequest, ScanHistoryItem, ScanReport } from './types/scan'
+import { clearAccessToken, compareAdminScans, compareScans, deactivateUser, deleteScan, exportScanJson, getAccessToken, getAdminAuditLogs, getAdminScanById, getAdminUsers, getScanById, getScans, login, reactivateUser, readStoredAuthState, register, scanFromFile, scanFromUrl } from './services/scanApi'
+import type { AdminAuditLog, AdminUserActivity, AuthResponse, RegisterRequest, ScanComparison, ScanHistoryItem, ScanReport, SecurityIssue } from './types/scan'
 
 type Page = 'accueil' | 'connexion' | 'scanner' | 'rapport' | 'historique' | 'admin' | 'avant-apres' | 'recommandations'
 
@@ -172,13 +201,38 @@ const report = ref<ScanReport | null>(null)
 const history = ref<ScanHistoryItem[]>([])
 const historyLoading = ref(false)
 const historyError = ref('')
+const comparison = ref<ScanComparison | null>(null)
+const comparisonLoading = ref(false)
+const comparisonError = ref('')
+const comparisonCurrentScanId = ref('')
+const comparisonBaselineScanId = ref('')
+const comparisonAccessMode = ref<'owner' | 'admin'>('owner')
+const comparisonViewedForUsername = ref('')
+const adminComparisonItems = ref<ScanHistoryItem[]>([])
+const reportFocusedIssueId = ref('')
+const reportAccessMode = ref<'owner' | 'admin'>('owner')
+const reportViewedForUsername = ref('')
 const adminUsers = ref<AdminUserActivity[]>([])
+const adminAuditLogs = ref<AdminAuditLog[]>([])
 const adminLoading = ref(false)
 const adminError = ref('')
 const authLoading = ref(false)
 const authState = ref<AuthResponse | null>(readStoredAuthState())
 const authIdentityLabel = computed(() =>
   authState.value ? `${authState.value.username} (${authState.value.role})` : 'Non connecté'
+)
+const comparisonItems = computed(() =>
+  comparisonAccessMode.value === 'admin' ? adminComparisonItems.value : history.value
+)
+const comparisonContextLabel = computed(() =>
+  comparisonAccessMode.value === 'admin' && comparisonViewedForUsername.value
+    ? `Comparaison des scans du compte ${comparisonViewedForUsername.value}`
+    : ''
+)
+const contentWidthClass = computed(() =>
+  page.value === 'rapport' || page.value === 'admin' || page.value === 'recommandations' || page.value === 'avant-apres'
+    ? 'max-w-[1640px]'
+    : 'max-w-[1420px]'
 )
 
 function go(target: Page) {
@@ -194,6 +248,10 @@ function go(target: Page) {
   }
 
   page.value = target
+
+  if (target === 'admin' && authState.value?.role === 'Admin') {
+    void loadAdminConsole()
+  }
 }
 
 async function handleLogin(payload: { username: string; password: string }) {
@@ -204,7 +262,7 @@ async function handleLogin(payload: { username: string; password: string }) {
     authState.value = await login(payload)
     await loadHistory()
     if (authState.value.role === 'Admin') {
-      await loadAdminUsers()
+      await loadAdminConsole()
     }
     page.value = 'historique'
   } catch (err: unknown) {
@@ -236,7 +294,18 @@ function handleLogout() {
   authState.value = null
   report.value = null
   history.value = []
+  comparison.value = null
+  comparisonError.value = ''
+  comparisonCurrentScanId.value = ''
+  comparisonBaselineScanId.value = ''
+  comparisonAccessMode.value = 'owner'
+  comparisonViewedForUsername.value = ''
+  adminComparisonItems.value = []
+  reportFocusedIssueId.value = ''
+  reportAccessMode.value = 'owner'
+  reportViewedForUsername.value = ''
   adminUsers.value = []
+  adminAuditLogs.value = []
   error.value = ''
   historyError.value = ''
   adminError.value = ''
@@ -256,7 +325,7 @@ async function loadHistory() {
   }
 }
 
-async function loadAdminUsers() {
+async function loadAdminConsole() {
   if (authState.value?.role !== 'Admin') {
     return
   }
@@ -264,9 +333,15 @@ async function loadAdminUsers() {
   adminLoading.value = true
   adminError.value = ''
   try {
-    adminUsers.value = await getAdminUsers()
+    const [users, logs] = await Promise.all([
+      getAdminUsers(),
+      getAdminAuditLogs()
+    ])
+
+    adminUsers.value = users
+    adminAuditLogs.value = logs
   } catch (err: unknown) {
-    adminError.value = extractApiError(err, 'Impossible de charger les utilisateurs.')
+    adminError.value = extractApiError(err, 'Impossible de charger la console admin.')
     console.error(err)
   } finally {
     adminLoading.value = false
@@ -276,9 +351,19 @@ async function loadAdminUsers() {
 async function handleDeactivateUser(username: string) {
   try {
     await deactivateUser(username)
-    await loadAdminUsers()
+    await loadAdminConsole()
   } catch (err: unknown) {
     adminError.value = extractApiError(err, 'Impossible de désactiver cet utilisateur.')
+    console.error(err)
+  }
+}
+
+async function handleReactivateUser(username: string) {
+  try {
+    await reactivateUser(username)
+    await loadAdminConsole()
+  } catch (err: unknown) {
+    adminError.value = extractApiError(err, 'Impossible de réactiver cet utilisateur.')
     console.error(err)
   }
 }
@@ -288,6 +373,9 @@ async function handleScanUrl(url: string) {
   error.value = ''
   try {
     report.value = await scanFromUrl({ openApiUrl: url })
+    reportFocusedIssueId.value = ''
+    reportAccessMode.value = 'owner'
+    reportViewedForUsername.value = ''
     await loadHistory()
     page.value = 'rapport'
   } catch (err: unknown) {
@@ -304,6 +392,9 @@ async function handleScanFile(file: File) {
   error.value = ''
   try {
     report.value = await scanFromFile(file)
+    reportFocusedIssueId.value = ''
+    reportAccessMode.value = 'owner'
+    reportViewedForUsername.value = ''
     await loadHistory()
     page.value = 'rapport'
   } catch (err: unknown) {
@@ -320,6 +411,9 @@ async function handleViewScan(id: string) {
   error.value = ''
   try {
     report.value = await getScanById(id)
+    reportFocusedIssueId.value = ''
+    reportAccessMode.value = 'owner'
+    reportViewedForUsername.value = ''
     page.value = 'rapport'
   } catch (err) {
     error.value = extractApiError(err, 'Impossible de charger ce rapport.')
@@ -348,13 +442,162 @@ async function handleExportScan(id: string) {
 
 async function handleDeleteScan(id: string) {
   try {
+    const wasCurrentReport = report.value?.scanId === id
     await deleteScan(id)
-    if (report.value?.scanId === id) report.value = null
+    if (wasCurrentReport) {
+      report.value = null
+    }
+    if (comparisonCurrentScanId.value === id || comparisonBaselineScanId.value === id) {
+      comparison.value = null
+      comparisonError.value = ''
+      comparisonCurrentScanId.value = ''
+      comparisonBaselineScanId.value = ''
+    }
+    if (reportFocusedIssueId.value && wasCurrentReport) {
+      reportFocusedIssueId.value = ''
+    }
+    if (wasCurrentReport) {
+      reportAccessMode.value = 'owner'
+      reportViewedForUsername.value = ''
+    }
     await loadHistory()
   } catch (err) {
     error.value = extractApiError(err, 'Impossible de supprimer ce scan.')
     console.error(err)
   }
+}
+
+function prepareComparison(scanId: string) {
+  comparisonAccessMode.value = 'owner'
+  comparisonViewedForUsername.value = ''
+  adminComparisonItems.value = []
+
+  const currentCandidate = report.value?.scanId && report.value.scanId !== scanId
+    ? report.value.scanId
+    : history.value.find(item => item.id !== scanId)?.id ?? ''
+
+  comparisonBaselineScanId.value = scanId
+  comparisonCurrentScanId.value = currentCandidate
+  comparison.value = null
+  comparisonError.value = ''
+  page.value = 'avant-apres'
+
+  if (comparisonCurrentScanId.value && comparisonCurrentScanId.value !== comparisonBaselineScanId.value) {
+    void handleCompareScans(comparisonCurrentScanId.value, comparisonBaselineScanId.value)
+  }
+}
+
+function handlePrepareAdminComparison(
+  scanId: string,
+  username: string,
+  scans: AdminUserActivity['scans']
+) {
+  const items = scans.map(scan => ({
+    id: scan.id,
+    targetName: scan.targetName,
+    openApiUrl: scan.openApiUrl,
+    score: scan.score,
+    status: scan.status,
+    createdAt: scan.createdAt,
+    issuesCount: scan.issuesCount
+  }))
+
+  comparisonAccessMode.value = 'admin'
+  comparisonViewedForUsername.value = username
+  adminComparisonItems.value = items
+
+  const currentCandidate = items.find(item => item.id !== scanId)?.id ?? ''
+
+  comparisonBaselineScanId.value = scanId
+  comparisonCurrentScanId.value = currentCandidate
+  comparison.value = null
+  comparisonError.value = ''
+  page.value = 'avant-apres'
+
+  if (comparisonCurrentScanId.value && comparisonCurrentScanId.value !== comparisonBaselineScanId.value) {
+    void handleCompareScans(comparisonCurrentScanId.value, comparisonBaselineScanId.value)
+  }
+}
+
+async function handleCompareScans(currentScanId: string, baselineScanId: string) {
+  comparisonLoading.value = true
+  comparisonError.value = ''
+  comparisonCurrentScanId.value = currentScanId
+  comparisonBaselineScanId.value = baselineScanId
+
+  try {
+    comparison.value = comparisonAccessMode.value === 'admin'
+      ? await compareAdminScans(currentScanId, baselineScanId)
+      : await compareScans(currentScanId, baselineScanId)
+    page.value = 'avant-apres'
+  } catch (err) {
+    comparison.value = null
+    comparisonError.value = extractApiError(err, 'Impossible de comparer ces scans.')
+    console.error(err)
+  } finally {
+    comparisonLoading.value = false
+  }
+}
+
+async function handleOpenIssueFromComparison(scanId: string, issueId: string) {
+  loading.value = true
+  error.value = ''
+
+  try {
+    if (report.value?.scanId !== scanId) {
+      report.value = comparisonAccessMode.value === 'admin'
+        ? await getAdminScanById(scanId)
+        : await getScanById(scanId)
+    }
+
+    reportFocusedIssueId.value = ''
+    reportAccessMode.value = comparisonAccessMode.value
+    reportViewedForUsername.value = comparisonAccessMode.value === 'admin'
+      ? comparisonViewedForUsername.value
+      : ''
+    page.value = 'rapport'
+
+    await nextTick()
+    reportFocusedIssueId.value = issueId
+  } catch (err) {
+    error.value = extractApiError(err, 'Impossible d\'ouvrir ce finding dans le rapport.')
+    console.error(err)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleViewAdminUserScan(scanId: string, username: string) {
+  loading.value = true
+  error.value = ''
+
+  try {
+    report.value = await getAdminScanById(scanId)
+    reportFocusedIssueId.value = ''
+    reportAccessMode.value = 'admin'
+    reportViewedForUsername.value = username
+    page.value = 'rapport'
+  } catch (err) {
+    error.value = extractApiError(err, 'Impossible de charger ce rapport utilisateur.')
+    console.error(err)
+  } finally {
+    loading.value = false
+  }
+}
+
+function handleIssueUpdated(updatedIssue: SecurityIssue) {
+  if (!report.value) {
+    return
+  }
+
+  report.value = {
+    ...report.value,
+    issues: report.value.issues.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue)
+  }
+}
+
+function handleIssueActionError(message: string) {
+  error.value = message
 }
 
 function extractApiError(err: unknown, fallback: string): string {
@@ -390,7 +633,7 @@ onMounted(async () => {
   if (getAccessToken()) {
     await loadHistory()
     if (authState.value?.role === 'Admin') {
-      await loadAdminUsers()
+      await loadAdminConsole()
     }
   }
 })

@@ -35,11 +35,17 @@ public class GetScanByIdUseCaseTests
                 new SecurityIssue
                 {
                     RuleCode = "API-AUTH-001",
+                    DetectionConfidence = "High",
                     Endpoint = "GET /admin/users",
+                    OpenApiLocation = "/paths/~1admin~1users/get",
+                    OpenApiExcerpt = "{\n  \"method\": \"GET\"\n}",
                     Title = "Endpoint sans authentification",
                     Description = "Test issue",
                     Recommendation = "Ajouter JWT/OAuth2.",
-                    OwaspCategory = "Broken Authentication"
+                    OwaspCategory = "Broken Authentication",
+                    OwaspTop10Id = "API2",
+                    OwaspTop10Version = "2023",
+                    OwaspTop10Title = "Broken Authentication"
                 }
             ]
         };
@@ -56,5 +62,11 @@ public class GetScanByIdUseCaseTests
         result.Should().NotBeNull();
         result!.ScanId.Should().Be(scan.Id);
         result.Issues.Should().ContainSingle();
+        result.Issues[0].DetectionConfidence.Should().Be("High");
+        result.Issues[0].OpenApiLocation.Should().Be("/paths/~1admin~1users/get");
+        result.Issues[0].OpenApiExcerpt.Should().Contain("\"method\": \"GET\"");
+        result.Issues[0].OwaspTop10Id.Should().Be("API2");
+        result.Issues[0].OwaspTop10Version.Should().Be("2023");
+        result.Issues[0].OwaspTop10Title.Should().Be("Broken Authentication");
     }
 }

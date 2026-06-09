@@ -15,7 +15,9 @@ public static class DependencyInjection
         services.AddScoped<ISecurityRule, MissingAuthenticationRule>();
         services.AddScoped<ISecurityRule, SensitiveEndpointRule>();
         services.AddScoped<ISecurityRule, SensitiveDataExposureRule>();
+        services.AddScoped<ISecurityRule, MassAssignmentRule>();
         services.AddScoped<ISecurityRule, WeakInputValidationRule>();
+        services.AddScoped<ISecurityRule, InventoryManagementRule>();
         services.AddScoped<ISecurityRule, InsecureServerUrlRule>();
 
         services.AddScoped<SecurityRuleEngine>();
@@ -24,9 +26,16 @@ public static class DependencyInjection
         services.AddScoped<ScanOpenApiFileUseCase>();
         services.AddScoped<GetAllScansUseCase>();
         services.AddScoped<GetScanByIdUseCase>();
+        services.AddScoped<GetAdminScanByIdUseCase>();
+        services.AddScoped<CompareScansUseCase>();
+        services.AddScoped<CompareAdminScansUseCase>();
         services.AddScoped<GetAdminUserActivityUseCase>();
+        services.AddScoped<GetAdminAuditLogsUseCase>();
+        services.AddScoped<RecordAdminAuditLogUseCase>();
         services.AddScoped<DeactivateUserUseCase>();
+        services.AddScoped<ReactivateUserUseCase>();
         services.AddScoped<DeleteScanUseCase>();
+        services.AddScoped<UpdateSecurityIssueReviewUseCase>();
         services.AddScoped<IValidator<DTOs.ScanRequestDto>, ScanRequestDtoValidator>();
         return services;
     }

@@ -31,6 +31,18 @@ public class UserRepository(ApiSecurityScannerDbContext dbContext) : IUserReposi
         return true;
     }
 
+    public async Task<bool> ReactivateAsync(string username, CancellationToken cancellationToken = default)
+    {
+        var user = await GetByUsernameAsync(username, cancellationToken);
+        if (user is null)
+        {
+            return false;
+        }
+
+        user.IsActive = true;
+        return true;
+    }
+
     public async Task AddAsync(AppUser user, CancellationToken cancellationToken = default) =>
         await dbContext.AppUsers.AddAsync(user, cancellationToken);
 

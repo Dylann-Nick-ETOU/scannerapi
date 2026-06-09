@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AdminUserActivity, AuthResponse, LoginRequest, RegisterRequest, ScanHistoryItem, ScanReport, ScanRequest } from '../types/scan'
+import type { AdminAuditLog, AdminUserActivity, AuthResponse, LoginRequest, RegisterRequest, ScanComparison, ScanHistoryItem, ScanReport, ScanRequest, SecurityIssue, UpdateIssueReviewRequest } from '../types/scan'
 
 export const scanApi = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api'
@@ -139,6 +139,26 @@ export async function getScanById(id: string): Promise<ScanReport> {
   return data
 }
 
+export async function getAdminScanById(id: string): Promise<ScanReport> {
+  const { data } = await scanApi.get<ScanReport>(`/admin/scans/${id}`)
+  return data
+}
+
+export async function compareScans(currentScanId: string, baselineScanId: string): Promise<ScanComparison> {
+  const { data } = await scanApi.get<ScanComparison>(`/scans/${currentScanId}/compare/${baselineScanId}`)
+  return data
+}
+
+export async function compareAdminScans(currentScanId: string, baselineScanId: string): Promise<ScanComparison> {
+  const { data } = await scanApi.get<ScanComparison>(`/admin/scans/${currentScanId}/compare/${baselineScanId}`)
+  return data
+}
+
+export async function updateIssueReview(scanId: string, issueId: string, payload: UpdateIssueReviewRequest): Promise<SecurityIssue> {
+  const { data } = await scanApi.patch<SecurityIssue>(`/scans/${scanId}/issues/${issueId}/review`, payload)
+  return data
+}
+
 export async function deleteScan(id: string): Promise<void> {
   await scanApi.delete(`/scans/${id}`)
 }
@@ -153,6 +173,15 @@ export async function getAdminUsers(): Promise<AdminUserActivity[]> {
   return data
 }
 
+export async function getAdminAuditLogs(): Promise<AdminAuditLog[]> {
+  const { data } = await scanApi.get<AdminAuditLog[]>('/admin/audit-logs')
+  return data
+}
+
 export async function deactivateUser(username: string): Promise<void> {
   await scanApi.post(`/admin/users/${encodeURIComponent(username)}/deactivate`)
+}
+
+export async function reactivateUser(username: string): Promise<void> {
+  await scanApi.post(`/admin/users/${encodeURIComponent(username)}/reactivate`)
 }

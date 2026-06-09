@@ -7,7 +7,8 @@ namespace ApiSecurityScanner.Application.Rules;
 
 public class WeakInputValidationRule : ISecurityRule
 {
-    public string RuleCode => "API-VALID-001";
+    private const string RuleCodeValue = "API-VALID-001";
+    public string RuleCode => RuleCodeValue;
     public string Name => "Weak Input Validation";
 
     public IReadOnlyList<SecurityIssue> Evaluate(object document)
@@ -23,96 +24,271 @@ public class WeakInputValidationRule : ISecurityRule
         {
             foreach (var operation in pathItem.Operations)
             {
-                var hasWeakValidation = false;
-
-                if (operation.Value.RequestBody?.Content is not null)
+                var endpoint = $"{operation.Key} {path}";
+                var weakRequestBodyMatch = FindWeakRequestBodyMatch(path, operation.Key, operation.Value);
+                if (weakRequestBodyMatch is not null)
                 {
-                    foreach (var mediaType in operation.Value.RequestBody.Content.Values)
+                    issues.Add(new SecurityIssue
                     {
-                        var schema = mediaType.Schema;
-                        if (schema is null)
-                        {
-                            continue;
-                        }
-
-                        if (HasWeakValidation(schema, new HashSet<string>(StringComparer.OrdinalIgnoreCase)))
-                        {
-                            hasWeakValidation = true;
-                            break;
-                        }
-                    }
+                        RuleCode = RuleCodeValue,
+                        Severity = SeverityLevel.Medium,
+                        DetectionConfidence = DetectionConfidenceLevels.Medium,
+                        Endpoint = endpoint,
+                        OpenApiLocation = weakRequestBodyMatch.Pointer,
+                        OpenApiExcerpt = OpenApiExcerptFormatter.ForSchema(weakRequestBodyMatch.FieldPath, weakRequestBodyMatch.Schema),
+                        Title = "Validation d'entrée insuffisante",
+                        Description = "Les schémas de requête ne définissent pas assez de contraintes de validation (required, min/max, format, pattern).",
+                        Recommendation = "Ajouter une validation stricte avec FluentValidation.",
+                        OwaspCategory = "Improper Input Validation"
+                    });
                 }
 
-                if (!hasWeakValidation)
-                {
-                    continue;
-                }
-
-                issues.Add(new SecurityIssue
-                {
-                    RuleCode = RuleCode,
-                    Severity = SeverityLevel.Medium,
-                    Endpoint = $"{operation.Key} {path}",
-                    Title = "Validation d'entrée insuffisante",
-                    Description = "Les schémas de requête ne définissent pas assez de contraintes de validation (required, min/max, format, pattern).",
-                    Recommendation = "Ajouter une validation stricte avec FluentValidation.",
-                    OwaspCategory = "Improper Input Validation"
-                });
+                issues.AddRange(GetWeakParameterIssues(path, operation.Key, pathItem, operation.Value, endpoint));
             }
         }
 
         return issues;
     }
 
-    private static bool HasWeakValidation(OpenApiSchema schema, HashSet<string> visitedRefs)
+    private static WeakSchemaMatch? FindWeakRequestBodyMatch(string path, OperationType operationType, OpenApiOperation operation)
+    {
+        if (operation.RequestBody?.Content is null)
+        {
+            return null;
+        }
+
+        foreach (var mediaType in operation.RequestBody.Content)
+        {
+            var schema = mediaType.Value.Schema;
+            if (schema is null)
+            {
+                continue;
+            }
+
+            var pointer = OpenApiJsonPointer.ForOperation(
+                path,
+                operationType,
+                "requestBody",
+                "content",
+                mediaType.Key,
+                "schema");
+
+            var weakLocation = FindWeakSchemaMatch(
+                schema,
+                currentPath: null,
+                pointer,
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+            if (weakLocation is not null)
+            {
+                return weakLocation;
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<SecurityIssue> GetWeakParameterIssues(
+        string path,
+        OperationType operationType,
+        OpenApiPathItem pathItem,
+        OpenApiOperation operation,
+        string endpoint)
+    {
+        foreach (var parameter in MergeParameters(path, operationType, pathItem, operation))
+        {
+            var location = parameter.In;
+            if (location is not ParameterLocation.Query and not ParameterLocation.Path and not ParameterLocation.Header)
+            {
+                continue;
+            }
+
+            var locationLabel = location.Value.ToString().ToLowerInvariant();
+
+            if (location == ParameterLocation.Path && !parameter.Required)
+            {
+                yield return new SecurityIssue
+                {
+                    RuleCode = RuleCodeValue,
+                    Severity = SeverityLevel.Medium,
+                    DetectionConfidence = DetectionConfidenceLevels.Medium,
+                    Endpoint = endpoint,
+                    OpenApiLocation = parameter.LocationPointer,
+                    OpenApiExcerpt = OpenApiExcerptFormatter.ForParameter(parameter.Name, locationLabel, parameter.Required, parameter.Schema),
+                    Title = $"Paramètre {locationLabel} mal défini",
+                    Description = $"Le paramètre '{parameter.Name}' doit être obligatoire et définir des contraintes de validation adaptées.",
+                    Recommendation = $"Marquer '{parameter.Name}' comme required et ajouter des contraintes OpenAPI (pattern, enum, min/max, minLength/maxLength).",
+                    OwaspCategory = "Improper Input Validation"
+                };
+
+                continue;
+            }
+
+            if (parameter.Schema is null)
+            {
+                continue;
+            }
+
+            if (!HasWeakParameterValidation(parameter))
+            {
+                continue;
+            }
+
+            yield return new SecurityIssue
+            {
+                RuleCode = RuleCodeValue,
+                Severity = SeverityLevel.Medium,
+                DetectionConfidence = DetectionConfidenceLevels.Medium,
+                Endpoint = endpoint,
+                OpenApiLocation = OpenApiJsonPointer.Append(parameter.LocationPointer, "schema"),
+                OpenApiExcerpt = OpenApiExcerptFormatter.ForParameter(parameter.Name, locationLabel, parameter.Required, parameter.Schema),
+                Title = $"Paramètre {locationLabel} peu contraint",
+                Description = $"Le paramètre '{parameter.Name}' n'expose pas assez de contraintes de validation dans sa définition OpenAPI.",
+                Recommendation = $"Ajouter des contraintes OpenAPI sur '{parameter.Name}' ({locationLabel}) : min/max, minLength/maxLength, pattern, enum, format.",
+                OwaspCategory = "Improper Input Validation"
+            };
+        }
+    }
+
+    private static IEnumerable<OpenApiParameterTarget> MergeParameters(
+        string path,
+        OperationType operationType,
+        OpenApiPathItem pathItem,
+        OpenApiOperation operation)
+    {
+        var merged = new Dictionary<(string Name, ParameterLocation? Location), OpenApiParameterTarget>();
+
+        for (var index = 0; index < pathItem.Parameters.Count; index++)
+        {
+            var parameter = pathItem.Parameters[index];
+            merged[(parameter.Name, parameter.In)] = new OpenApiParameterTarget(
+                parameter,
+                OpenApiJsonPointer.Create("paths", path, "parameters", index.ToString()));
+        }
+
+        for (var index = 0; index < operation.Parameters.Count; index++)
+        {
+            var parameter = operation.Parameters[index];
+            merged[(parameter.Name, parameter.In)] = new OpenApiParameterTarget(
+                parameter,
+                OpenApiJsonPointer.ForOperation(path, operationType, "parameters", index.ToString()));
+        }
+
+        return merged.Values;
+    }
+
+    private static bool HasWeakParameterValidation(OpenApiParameterTarget parameter)
+    {
+        var schema = parameter.Schema;
+        if (schema is null)
+        {
+            return false;
+        }
+
+        return !HasAnySchemaConstraint(schema) || FindWeakSchemaMatch(schema, null, string.Empty, new HashSet<string>(StringComparer.OrdinalIgnoreCase)) is not null;
+    }
+
+    private static WeakSchemaMatch? FindWeakSchemaMatch(
+        OpenApiSchema schema,
+        string? currentPath,
+        string pointer,
+        HashSet<string> visitedRefs)
     {
         if (schema.Reference?.Id is { Length: > 0 } referenceId)
         {
             if (!visitedRefs.Add(referenceId))
             {
-                return false;
+                return null;
             }
         }
 
-        foreach (var property in schema.Properties.Values)
+        foreach (var property in schema.Properties)
         {
-            var hasAnyConstraint =
-                property.MinLength.HasValue ||
-                property.MaxLength.HasValue ||
-                property.Pattern is { Length: > 0 } ||
-                property.Minimum.HasValue ||
-                property.Maximum.HasValue ||
-                property.Format is { Length: > 0 };
+            var propertyPointer = OpenApiJsonPointer.Append(pointer, "properties", property.Key);
+            var propertyPath = string.IsNullOrWhiteSpace(currentPath) ? property.Key : $"{currentPath}.{property.Key}";
 
-            if (!hasAnyConstraint)
+            if (!HasAnySchemaConstraint(property.Value))
             {
-                return true;
+                return new WeakSchemaMatch(propertyPath, propertyPointer, property.Value);
             }
 
-            if (HasWeakValidation(property, visitedRefs))
+            var nestedWeakLocation = FindWeakSchemaMatch(property.Value, propertyPath, propertyPointer, visitedRefs);
+            if (nestedWeakLocation is not null)
             {
-                return true;
+                return nestedWeakLocation;
             }
         }
 
         if (schema.Type == "object" && schema.Properties.Count > 0 && schema.Required.Count == 0)
         {
-            return true;
+            return new WeakSchemaMatch(currentPath, pointer, schema);
         }
 
-        if (schema.Items is not null && HasWeakValidation(schema.Items, visitedRefs))
+        if (schema.Items is not null)
         {
-            return true;
-        }
+            var itemsWeakLocation = FindWeakSchemaMatch(
+                schema.Items,
+                string.IsNullOrWhiteSpace(currentPath) ? "[]" : $"{currentPath}[]",
+                OpenApiJsonPointer.Append(pointer, "items"),
+                visitedRefs);
 
-        foreach (var composite in schema.AllOf.Concat(schema.AnyOf).Concat(schema.OneOf))
-        {
-            if (HasWeakValidation(composite, visitedRefs))
+            if (itemsWeakLocation is not null)
             {
-                return true;
+                return itemsWeakLocation;
             }
         }
 
-        return false;
+        foreach (var (segment, compositeList) in new[]
+                 {
+                     ("allOf", schema.AllOf),
+                     ("anyOf", schema.AnyOf),
+                     ("oneOf", schema.OneOf)
+                 })
+        {
+            for (var index = 0; index < compositeList.Count; index++)
+            {
+                var compositeWeakLocation = FindWeakSchemaMatch(
+                    compositeList[index],
+                    currentPath,
+                    OpenApiJsonPointer.Append(pointer, segment, index.ToString()),
+                    visitedRefs);
+
+                if (compositeWeakLocation is not null)
+                {
+                    return compositeWeakLocation;
+                }
+            }
+        }
+
+        return null;
     }
+
+    private static bool HasAnySchemaConstraint(OpenApiSchema schema)
+    {
+        return schema.MinLength.HasValue ||
+               schema.MaxLength.HasValue ||
+               schema.Pattern is { Length: > 0 } ||
+               schema.Minimum.HasValue ||
+               schema.Maximum.HasValue ||
+               schema.ExclusiveMinimum == true ||
+               schema.ExclusiveMaximum == true ||
+               schema.MultipleOf.HasValue ||
+               schema.Format is { Length: > 0 } ||
+               schema.Enum.Count > 0 ||
+               schema.MinItems.HasValue ||
+               schema.MaxItems.HasValue ||
+               schema.UniqueItems == true ||
+               schema.MinProperties.HasValue ||
+               schema.MaxProperties.HasValue;
+    }
+
+    private sealed record OpenApiParameterTarget(OpenApiParameter Parameter, string LocationPointer)
+    {
+        public string Name => Parameter.Name;
+        public ParameterLocation? In => Parameter.In;
+        public bool Required => Parameter.Required;
+        public OpenApiSchema? Schema => Parameter.Schema;
+    }
+
+    private sealed record WeakSchemaMatch(string? FieldPath, string Pointer, OpenApiSchema Schema);
 }

@@ -8,15 +8,19 @@
       <div class="space-y-6 px-8 py-6 text-cyan-100">
         <div class="grid gap-4 md:grid-cols-2 text-sm">
           <p><strong>Endpoint concerné:</strong> <span class="rounded bg-[#12384e] px-2 py-1 font-mono">{{ topIssue.endpoint }}</span></p>
-          <p><strong>Catégorie OWASP:</strong> {{ topIssue.owaspCategory }}</p>
+          <p><strong>Référence OWASP:</strong> {{ owaspLabelWithFallback(topIssue) }}</p>
+          <p><strong>Niveau de confiance:</strong> <span class="rounded-full border px-3 py-1 text-xs" :class="confidenceClass(topIssue.detectionConfidence)">{{ topIssue.detectionConfidence }}</span></p>
+          <p><strong>Chemin OpenAPI:</strong> <span class="rounded bg-[#12384e] px-2 py-1 font-mono break-all">{{ topIssue.openApiLocation || '-' }}</span></p>
           <p><strong>Risque:</strong> {{ topIssue.description }}</p>
           <p><strong>Code règle:</strong> <span class="rounded bg-[#355d38] px-2 py-1 font-mono text-accent">{{ topIssue.ruleCode }}</span></p>
         </div>
         <div class="rounded-xl border border-cyan-700/70 bg-[#0a3c57] p-5">
           <p class="text-lg font-medium">Recommandation</p>
           <p class="mt-2 text-sm">{{ topIssue.recommendation }}</p>
-          <pre class="mt-4 overflow-x-auto rounded bg-[#082e44] p-4 text-xs text-cyan-100">[Authorize(Roles = "Admin")]
-public async Task&lt;IActionResult&gt; GetUsers()</pre>
+          <div v-if="topIssue.openApiExcerpt" class="mt-4">
+            <p class="text-sm font-medium text-cyan-100/90">Extrait OpenAPI</p>
+            <pre class="mt-2 overflow-x-auto rounded bg-[#082e44] p-4 text-xs text-cyan-100 whitespace-pre-wrap break-words">{{ topIssue.openApiExcerpt }}</pre>
+          </div>
         </div>
       </div>
     </article>
@@ -41,12 +45,16 @@ public async Task&lt;IActionResult&gt; GetUsers()</pre>
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { SecurityIssue } from '../types/scan'
+import { owaspLabel, sortIssues } from '../utils/issuePresentation'
 
 const props = defineProps<{ issues: SecurityIssue[] }>()
-const topIssue = computed(() => props.issues[0])
+const orderedIssues = computed(() => sortIssues(props.issues))
+const actionableIssues = computed(() => orderedIssues.value.filter(issue => issue.reviewStatus === 'Open'))
+const topIssue = computed(() => actionableIssues.value[0] ?? orderedIssues.value[0])
 const recommendations = computed(() => {
   const defaults = ['Ajouter JWT/OAuth2', 'Valider toutes les entrées', 'Masquer les champs sensibles', 'Centraliser la gestion des erreurs', 'Activer HTTPS', 'Journaliser les événements importants']
-  const fromIssues = props.issues.map(x => x.recommendation)
+  const source = actionableIssues.value.length > 0 ? actionableIssues.value : orderedIssues.value
+  const fromIssues = source.map(x => x.recommendation)
   return [...new Set([...fromIssues, ...defaults])].slice(0, 6)
 })
 function iconFor(text: string): string {
@@ -73,5 +81,16 @@ function helperText(text: string): string {
   if (t.includes('erreur')) return 'Middleware global pour gérer les exceptions sans exposer de détails'
   if (t.includes('https')) return 'Forcer le chiffrement des communications pour toutes les requêtes'
   return 'Logger les accès, erreurs et actions critiques avec Serilog'
+}
+
+function confidenceClass(confidence: SecurityIssue['detectionConfidence']): string {
+  if (confidence === 'High') return 'border-safe/50 text-safe bg-safe/10'
+  if (confidence === 'Medium') return 'border-warning/50 text-warning bg-warning/10'
+  return 'border-cyan-500/50 text-cyan-200 bg-cyan-500/10'
+}
+
+function owaspLabelWithFallback(issue: SecurityIssue): string {
+  const label = owaspLabel(issue)
+  return label === issue.owaspCategory ? `${label} (hors mapping direct Top 10)` : label
 }
 </script>

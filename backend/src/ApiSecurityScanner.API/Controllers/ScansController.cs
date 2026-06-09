@@ -19,7 +19,9 @@ public class ScansController(
     ScanOpenApiFileUseCase scanOpenApiFileUseCase,
     GetAllScansUseCase getAllScansUseCase,
     GetScanByIdUseCase getScanByIdUseCase,
+    CompareScansUseCase compareScansUseCase,
     DeleteScanUseCase deleteScanUseCase,
+    UpdateSecurityIssueReviewUseCase updateSecurityIssueReviewUseCase,
     IValidator<ScanRequestDto> validator) : ControllerBase
 {
     private const long MaxUploadBytes = 2 * 1024 * 1024; // 2MB
@@ -97,6 +99,26 @@ public class ScansController(
         return Ok(report);
     }
 
+    [HttpGet("{currentScanId:guid}/compare/{baselineScanId:guid}")]
+    public async Task<ActionResult<ScanComparisonDto>> CompareScans(
+        Guid currentScanId,
+        Guid baselineScanId,
+        CancellationToken cancellationToken)
+    {
+        var comparison = await compareScansUseCase.ExecuteAsync(
+            currentScanId,
+            baselineScanId,
+            GetCurrentOwnerId(),
+            cancellationToken);
+
+        if (comparison is null)
+        {
+            return NotFound(new { message = "One or both scans were not found." });
+        }
+
+        return Ok(comparison);
+    }
+
     [HttpGet("{id:guid}/export")]
     public async Task<IActionResult> ExportScan(Guid id, CancellationToken cancellationToken)
     {
@@ -124,6 +146,29 @@ public class ScansController(
         return NoContent();
     }
 
+    [HttpPatch("{scanId:guid}/issues/{issueId:guid}/review")]
+    public async Task<ActionResult<SecurityIssueDto>> UpdateIssueReview(
+        Guid scanId,
+        Guid issueId,
+        [FromBody] UpdateSecurityIssueReviewRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var issue = await updateSecurityIssueReviewUseCase.ExecuteAsync(
+            scanId,
+            issueId,
+            GetCurrentOwnerId(),
+            GetCurrentUsername(),
+            request,
+            cancellationToken);
+
+        if (issue is null)
+        {
+            return NotFound(new { message = "Issue not found." });
+        }
+
+        return Ok(issue);
+    }
+
     private string GetCurrentOwnerId()
     {
         var ownerId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
@@ -133,5 +178,16 @@ public class ScansController(
         }
 
         return ownerId;
+    }
+
+    private string GetCurrentUsername()
+    {
+        var username = User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            throw new UnauthorizedAccessException("Missing name claim.");
+        }
+
+        return username;
     }
 }

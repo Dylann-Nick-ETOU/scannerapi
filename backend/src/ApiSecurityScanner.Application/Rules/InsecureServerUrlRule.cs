@@ -7,6 +7,7 @@ namespace ApiSecurityScanner.Application.Rules;
 
 public class InsecureServerUrlRule : ISecurityRule
 {
+    private static readonly OwaspTop10Mapping Mapping = OwaspTop10Mappings.SecurityMisconfiguration2023;
     public string RuleCode => "API-CONFIG-001";
     public string Name => "Insecure Server URL";
 
@@ -19,8 +20,9 @@ public class InsecureServerUrlRule : ISecurityRule
 
         var issues = new List<SecurityIssue>();
 
-        foreach (var server in openApi.Servers)
+        for (var serverIndex = 0; serverIndex < openApi.Servers.Count; serverIndex++)
         {
+            var server = openApi.Servers[serverIndex];
             if (!Uri.TryCreate(server.Url, UriKind.Absolute, out var uri))
             {
                 continue;
@@ -35,11 +37,17 @@ public class InsecureServerUrlRule : ISecurityRule
             {
                 RuleCode = RuleCode,
                 Severity = SeverityLevel.Medium,
+                DetectionConfidence = DetectionConfidenceLevels.High,
                 Endpoint = "Server URL",
+                OpenApiLocation = OpenApiJsonPointer.Create("servers", serverIndex.ToString(), "url"),
+                OpenApiExcerpt = OpenApiExcerptFormatter.ForServer(server, uri.Scheme),
                 Title = "Configuration serveur non sécurisée",
                 Description = $"Le serveur '{server.Url}' utilise HTTP.",
                 Recommendation = "Forcer HTTPS.",
-                OwaspCategory = "Security Misconfiguration"
+                OwaspCategory = Mapping.Title,
+                OwaspTop10Id = Mapping.Id,
+                OwaspTop10Version = Mapping.Version,
+                OwaspTop10Title = Mapping.Title
             });
         }
 

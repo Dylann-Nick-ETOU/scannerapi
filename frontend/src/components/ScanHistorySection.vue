@@ -15,25 +15,25 @@
     <p v-else-if="items.length === 0" class="text-cyan-200/70">Aucun scan enregistré.</p>
 
     <div v-else class="overflow-x-auto">
-      <table class="w-full min-w-[900px] text-left text-sm">
+      <table class="w-full min-w-[1080px] text-left text-sm">
         <thead>
           <tr class="border-b border-cyan-900 text-cyan-100/70">
-            <th class="py-3">Cible</th>
-            <th class="py-3">Score</th>
-            <th class="py-3">Issues</th>
-            <th class="py-3">Statut</th>
-            <th class="py-3">Date</th>
-            <th class="py-3 text-right">Actions</th>
+            <th class="px-3 py-3">Cible</th>
+            <th class="px-3 py-3">Score</th>
+            <th class="px-3 py-3">Issues</th>
+            <th class="px-3 py-3">Statut</th>
+            <th class="px-3 py-3">Date</th>
+            <th class="px-3 py-3 text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="item in items" :key="item.id" class="border-b border-cyan-950">
-            <td class="py-3">{{ item.targetName }}</td>
-            <td class="py-3">{{ item.score }}</td>
-            <td class="py-3">{{ item.issuesCount }}</td>
-            <td class="py-3">{{ item.status }}</td>
-            <td class="py-3">{{ formatDate(item.createdAt) }}</td>
-            <td class="py-3 text-right">
+            <td class="px-3 py-3">{{ item.targetName }}</td>
+            <td class="px-3 py-3">{{ item.score }}</td>
+            <td class="px-3 py-3">{{ item.issuesCount }}</td>
+            <td class="px-3 py-3">{{ item.status }}</td>
+            <td class="px-3 py-3">{{ formatDate(item.createdAt) }}</td>
+            <td class="px-3 py-3 text-right">
               <div class="inline-flex gap-2">
                 <button
                   class="rounded border border-cyan-700 px-3 py-1 text-cyan-100 hover:border-accent hover:text-accent"
@@ -46,6 +46,12 @@
                   @click="$emit('export', item.id)"
                 >
                   Exporter JSON
+                </button>
+                <button
+                  class="rounded border border-cyan-700 px-3 py-1 text-cyan-100 hover:border-safe hover:text-safe"
+                  @click="$emit('compare', item.id)"
+                >
+                  Comparer
                 </button>
                 <button
                   class="rounded border border-critical/60 px-3 py-1 text-critical hover:bg-critical/10"
@@ -75,6 +81,7 @@ defineEmits<{
   refresh: []
   view: [id: string]
   export: [id: string]
+  compare: [id: string]
   remove: [id: string]
 }>()
 

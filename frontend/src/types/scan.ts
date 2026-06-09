@@ -1,4 +1,6 @@
 export type Severity = 'Low' | 'Medium' | 'High' | 'Critical'
+export type DetectionConfidence = 'Low' | 'Medium' | 'High'
+export type ReviewStatus = 'Open' | 'AcceptedRisk' | 'FalsePositive'
 
 export interface LoginRequest {
   username: string
@@ -25,13 +27,24 @@ export interface ScanRequest {
 }
 
 export interface SecurityIssue {
+  id: string
   ruleCode: string
   severity: Severity
+  detectionConfidence: DetectionConfidence
+  reviewStatus: ReviewStatus
+  reviewComment: string
+  reviewedAt?: string | null
+  reviewedBy: string
   endpoint: string
+  openApiLocation: string
+  openApiExcerpt: string
   title: string
   description: string
   recommendation: string
   owaspCategory: string
+  owaspTop10Id: string
+  owaspTop10Version: string
+  owaspTop10Title: string
 }
 
 export interface ScanSummary {
@@ -47,6 +60,37 @@ export interface ScanReport {
   score: number
   summary: ScanSummary
   issues: SecurityIssue[]
+}
+
+export interface UpdateIssueReviewRequest {
+  status: ReviewStatus
+  comment?: string
+}
+
+export interface ComparedScan {
+  scanId: string
+  targetName: string
+  openApiUrl?: string | null
+  createdAt: string
+  score: number
+  summary: ScanSummary
+}
+
+export interface ScanComparisonSummary {
+  newIssuesCount: number
+  resolvedIssuesCount: number
+  unchangedIssuesCount: number
+}
+
+export interface ScanComparison {
+  baseline: ComparedScan
+  current: ComparedScan
+  scoreDelta: number
+  totalIssuesDelta: number
+  summary: ScanComparisonSummary
+  newIssues: SecurityIssue[]
+  resolvedIssues: SecurityIssue[]
+  unchangedIssues: SecurityIssue[]
 }
 
 export interface ScanHistoryItem {
@@ -78,4 +122,14 @@ export interface AdminUserActivity {
   scansCount: number
   lastScanAt?: string | null
   scans: AdminUserScanItem[]
+}
+
+export interface AdminAuditLog {
+  id: string
+  adminUsername: string
+  actionType: string
+  targetUsername?: string | null
+  targetScanId?: string | null
+  details: string
+  createdAt: string
 }

@@ -175,7 +175,6 @@ using (var scope = app.Services.CreateScope())
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseForwardedHeaders();
 app.UseCors("Frontend");
-app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
@@ -185,6 +184,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/api/health");
@@ -210,6 +210,8 @@ static void EnsureApplicationSchema(
             EnsureScanOwnerColumn(connection, logger);
             EnsureUserTable(connection, logger);
             EnsureUserColumns(connection, logger);
+            EnsureAdminAuditLogTable(connection, logger);
+            EnsureSecurityIssueColumns(connection, logger);
             logger.LogInformation("Application tables already exist.");
             return;
         }
@@ -299,6 +301,56 @@ static void EnsureUserColumns(NpgsqlConnection connection, Microsoft.Extensions.
         """;
     command.ExecuteNonQuery();
     logger.LogInformation("Ensured AppUsers security columns exist.");
+}
+
+static void EnsureSecurityIssueColumns(NpgsqlConnection connection, Microsoft.Extensions.Logging.ILogger logger)
+{
+    using var command = connection.CreateCommand();
+    command.CommandText = """
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "DetectionConfidence" character varying(20) NOT NULL DEFAULT '';
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "ReviewStatus" character varying(30) NOT NULL DEFAULT 'Open';
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "ReviewComment" character varying(1000) NOT NULL DEFAULT '';
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "ReviewedAt" timestamp with time zone NULL;
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "ReviewedBy" character varying(100) NOT NULL DEFAULT '';
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "OpenApiLocation" character varying(1200) NOT NULL DEFAULT '';
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "OpenApiExcerpt" character varying(4000) NOT NULL DEFAULT '';
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "OwaspTop10Id" character varying(20) NOT NULL DEFAULT '';
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "OwaspTop10Version" character varying(10) NOT NULL DEFAULT '';
+        ALTER TABLE "SecurityIssues"
+        ADD COLUMN IF NOT EXISTS "OwaspTop10Title" character varying(200) NOT NULL DEFAULT '';
+        """;
+    command.ExecuteNonQuery();
+    logger.LogInformation("Ensured SecurityIssues OWASP mapping columns exist.");
+}
+
+static void EnsureAdminAuditLogTable(NpgsqlConnection connection, Microsoft.Extensions.Logging.ILogger logger)
+{
+    using var command = connection.CreateCommand();
+    command.CommandText = """
+        CREATE TABLE IF NOT EXISTS "AdminAuditLogs" (
+            "Id" uuid NOT NULL,
+            "AdminUsername" character varying(100) NOT NULL,
+            "ActionType" character varying(50) NOT NULL,
+            "TargetUsername" character varying(100) NULL,
+            "TargetScanId" uuid NULL,
+            "Details" character varying(1000) NOT NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            CONSTRAINT "PK_AdminAuditLogs" PRIMARY KEY ("Id")
+        );
+        CREATE INDEX IF NOT EXISTS "IX_AdminAuditLogs_CreatedAt" ON "AdminAuditLogs" ("CreatedAt");
+        CREATE INDEX IF NOT EXISTS "IX_AdminAuditLogs_TargetUsername_CreatedAt" ON "AdminAuditLogs" ("TargetUsername", "CreatedAt");
+        """;
+    command.ExecuteNonQuery();
+    logger.LogInformation("Ensured AdminAuditLogs table exists.");
 }
 
 static void EnsureScanOwnerColumn(NpgsqlConnection connection, Microsoft.Extensions.Logging.ILogger logger)
