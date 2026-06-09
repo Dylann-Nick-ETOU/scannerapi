@@ -27,6 +27,7 @@ public static class DependencyInjection
                 AllowAutoRedirect = false,
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
             });
+        services.AddScoped<IAdminAuditLogRepository, AdminAuditLogRepository>();
         services.AddScoped<IScanRepository, ScanRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         return services;

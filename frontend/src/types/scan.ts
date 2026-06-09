@@ -123,3 +123,13 @@ export interface AdminUserActivity {
   lastScanAt?: string | null
   scans: AdminUserScanItem[]
 }
+
+export interface AdminAuditLog {
+  id: string
+  adminUsername: string
+  actionType: string
+  targetUsername?: string | null
+  targetScanId?: string | null
+  details: string
+  createdAt: string
+}

@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AdminUserActivity, AuthResponse, LoginRequest, RegisterRequest, ScanComparison, ScanHistoryItem, ScanReport, ScanRequest, SecurityIssue, UpdateIssueReviewRequest } from '../types/scan'
+import type { AdminAuditLog, AdminUserActivity, AuthResponse, LoginRequest, RegisterRequest, ScanComparison, ScanHistoryItem, ScanReport, ScanRequest, SecurityIssue, UpdateIssueReviewRequest } from '../types/scan'
 
 export const scanApi = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api'
@@ -170,6 +170,11 @@ export async function exportScanJson(id: string): Promise<Blob> {
 
 export async function getAdminUsers(): Promise<AdminUserActivity[]> {
   const { data } = await scanApi.get<AdminUserActivity[]>('/admin/users')
+  return data
+}
+
+export async function getAdminAuditLogs(): Promise<AdminAuditLog[]> {
+  const { data } = await scanApi.get<AdminAuditLog[]>('/admin/audit-logs')
   return data
 }
 

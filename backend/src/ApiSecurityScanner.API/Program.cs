@@ -210,6 +210,7 @@ static void EnsureApplicationSchema(
             EnsureScanOwnerColumn(connection, logger);
             EnsureUserTable(connection, logger);
             EnsureUserColumns(connection, logger);
+            EnsureAdminAuditLogTable(connection, logger);
             EnsureSecurityIssueColumns(connection, logger);
             logger.LogInformation("Application tables already exist.");
             return;
@@ -329,6 +330,27 @@ static void EnsureSecurityIssueColumns(NpgsqlConnection connection, Microsoft.Ex
         """;
     command.ExecuteNonQuery();
     logger.LogInformation("Ensured SecurityIssues OWASP mapping columns exist.");
+}
+
+static void EnsureAdminAuditLogTable(NpgsqlConnection connection, Microsoft.Extensions.Logging.ILogger logger)
+{
+    using var command = connection.CreateCommand();
+    command.CommandText = """
+        CREATE TABLE IF NOT EXISTS "AdminAuditLogs" (
+            "Id" uuid NOT NULL,
+            "AdminUsername" character varying(100) NOT NULL,
+            "ActionType" character varying(50) NOT NULL,
+            "TargetUsername" character varying(100) NULL,
+            "TargetScanId" uuid NULL,
+            "Details" character varying(1000) NOT NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            CONSTRAINT "PK_AdminAuditLogs" PRIMARY KEY ("Id")
+        );
+        CREATE INDEX IF NOT EXISTS "IX_AdminAuditLogs_CreatedAt" ON "AdminAuditLogs" ("CreatedAt");
+        CREATE INDEX IF NOT EXISTS "IX_AdminAuditLogs_TargetUsername_CreatedAt" ON "AdminAuditLogs" ("TargetUsername", "CreatedAt");
+        """;
+    command.ExecuteNonQuery();
+    logger.LogInformation("Ensured AdminAuditLogs table exists.");
 }
 
 static void EnsureScanOwnerColumn(NpgsqlConnection connection, Microsoft.Extensions.Logging.ILogger logger)

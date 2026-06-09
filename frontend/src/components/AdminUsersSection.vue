@@ -139,18 +139,20 @@
                           <td class="px-3 py-2">{{ scan.status }}</td>
                           <td class="px-3 py-2">{{ formatDate(scan.createdAt) }}</td>
                           <td class="px-3 py-2 text-right">
-                    <button
-                      class="rounded border border-cyan-700 px-3 py-1 text-cyan-100 hover:border-accent hover:text-accent"
-                      @click="$emit('view-scan', scan.id, item.username)"
-                    >
-                      Voir le rapport
-                    </button>
-                    <button
-                      class="rounded border border-cyan-700 px-3 py-1 text-cyan-100 hover:border-safe hover:text-safe"
-                      @click="$emit('compare-scan', scan.id, item.username, item.scans)"
-                    >
-                      Comparer
-                    </button>
+                            <div class="inline-flex gap-2">
+                              <button
+                                class="rounded border border-cyan-700 px-3 py-1 text-cyan-100 hover:border-accent hover:text-accent"
+                                @click="$emit('view-scan', scan.id, item.username)"
+                              >
+                                Voir le rapport
+                              </button>
+                              <button
+                                class="rounded border border-cyan-700 px-3 py-1 text-cyan-100 hover:border-safe hover:text-safe"
+                                @click="$emit('compare-scan', scan.id, item.username, item.scans)"
+                              >
+                                Comparer
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       </tbody>
@@ -162,16 +164,56 @@
           </tbody>
         </table>
       </div>
+
+      <section class="rounded-2xl border border-cyan-800/70 bg-[#04314e]/70 p-5">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h4 class="text-xl font-semibold">Journal admin</h4>
+            <p class="mt-1 text-sm text-cyan-100/70">Dernières actions sensibles réalisées depuis la console.</p>
+          </div>
+          <span class="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-100/80">{{ auditLogs.length }} entrée(s)</span>
+        </div>
+
+        <div v-if="auditLogs.length === 0" class="text-sm text-cyan-100/70">
+          Aucune action admin journalisée pour le moment.
+        </div>
+
+        <div v-else class="overflow-x-auto">
+          <table class="w-full min-w-[1040px] text-left text-sm">
+            <thead>
+              <tr class="border-b border-cyan-900 text-cyan-100/70">
+                <th class="px-3 py-3">Date</th>
+                <th class="px-3 py-3">Admin</th>
+                <th class="px-3 py-3">Action</th>
+                <th class="px-3 py-3">Compte ciblé</th>
+                <th class="px-3 py-3">Scan</th>
+                <th class="px-3 py-3">Détail</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="log in auditLogs" :key="log.id" class="border-b border-cyan-950/80">
+                <td class="px-3 py-3">{{ formatDate(log.createdAt) }}</td>
+                <td class="px-3 py-3">{{ log.adminUsername }}</td>
+                <td class="px-3 py-3">{{ actionLabel(log.actionType) }}</td>
+                <td class="px-3 py-3">{{ log.targetUsername || '-' }}</td>
+                <td class="px-3 py-3 font-mono text-xs text-cyan-100/80">{{ log.targetScanId || '-' }}</td>
+                <td class="px-3 py-3 text-cyan-100/85">{{ log.details }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { AdminUserActivity } from '../types/scan'
+import type { AdminAuditLog, AdminUserActivity } from '../types/scan'
 
 const props = defineProps<{
   items: AdminUserActivity[]
+  auditLogs: AdminAuditLog[]
   loading: boolean
   error?: string
 }>()
@@ -237,5 +279,13 @@ function resetFilters() {
 
 function formatDate(value: string): string {
   return new Date(value).toLocaleString('fr-FR')
+}
+
+function actionLabel(actionType: string): string {
+  if (actionType === 'DeactivateUser') return 'Désactivation'
+  if (actionType === 'ReactivateUser') return 'Réactivation'
+  if (actionType === 'ViewUserScanReport') return 'Ouverture rapport'
+  if (actionType === 'CompareUserScans') return 'Comparaison scans'
+  return actionType
 }
 </script>

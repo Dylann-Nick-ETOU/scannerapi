@@ -115,9 +115,10 @@
         <section v-else-if="page === 'admin'" key="admin">
           <AdminUsersSection
             :items="adminUsers"
+            :audit-logs="adminAuditLogs"
             :loading="adminLoading"
             :error="adminError"
-            @refresh="loadAdminUsers"
+            @refresh="loadAdminConsole"
             @deactivate="handleDeactivateUser"
             @reactivate="handleReactivateUser"
             @view-scan="handleViewAdminUserScan"
@@ -174,8 +175,8 @@ import RecommendationCard from './components/RecommendationCard.vue'
 import ScanForm from './components/ScanForm.vue'
 import ScanHistorySection from './components/ScanHistorySection.vue'
 import ScoreCard from './components/ScoreCard.vue'
-import { clearAccessToken, compareAdminScans, compareScans, deactivateUser, deleteScan, exportScanJson, getAccessToken, getAdminScanById, getAdminUsers, getScanById, getScans, login, reactivateUser, readStoredAuthState, register, scanFromFile, scanFromUrl } from './services/scanApi'
-import type { AdminUserActivity, AuthResponse, RegisterRequest, ScanComparison, ScanHistoryItem, ScanReport, SecurityIssue } from './types/scan'
+import { clearAccessToken, compareAdminScans, compareScans, deactivateUser, deleteScan, exportScanJson, getAccessToken, getAdminAuditLogs, getAdminScanById, getAdminUsers, getScanById, getScans, login, reactivateUser, readStoredAuthState, register, scanFromFile, scanFromUrl } from './services/scanApi'
+import type { AdminAuditLog, AdminUserActivity, AuthResponse, RegisterRequest, ScanComparison, ScanHistoryItem, ScanReport, SecurityIssue } from './types/scan'
 
 type Page = 'accueil' | 'connexion' | 'scanner' | 'rapport' | 'historique' | 'admin' | 'avant-apres' | 'recommandations'
 
@@ -212,6 +213,7 @@ const reportFocusedIssueId = ref('')
 const reportAccessMode = ref<'owner' | 'admin'>('owner')
 const reportViewedForUsername = ref('')
 const adminUsers = ref<AdminUserActivity[]>([])
+const adminAuditLogs = ref<AdminAuditLog[]>([])
 const adminLoading = ref(false)
 const adminError = ref('')
 const authLoading = ref(false)
@@ -246,6 +248,10 @@ function go(target: Page) {
   }
 
   page.value = target
+
+  if (target === 'admin' && authState.value?.role === 'Admin') {
+    void loadAdminConsole()
+  }
 }
 
 async function handleLogin(payload: { username: string; password: string }) {
@@ -256,7 +262,7 @@ async function handleLogin(payload: { username: string; password: string }) {
     authState.value = await login(payload)
     await loadHistory()
     if (authState.value.role === 'Admin') {
-      await loadAdminUsers()
+      await loadAdminConsole()
     }
     page.value = 'historique'
   } catch (err: unknown) {
@@ -299,6 +305,7 @@ function handleLogout() {
   reportAccessMode.value = 'owner'
   reportViewedForUsername.value = ''
   adminUsers.value = []
+  adminAuditLogs.value = []
   error.value = ''
   historyError.value = ''
   adminError.value = ''
@@ -318,7 +325,7 @@ async function loadHistory() {
   }
 }
 
-async function loadAdminUsers() {
+async function loadAdminConsole() {
   if (authState.value?.role !== 'Admin') {
     return
   }
@@ -326,9 +333,15 @@ async function loadAdminUsers() {
   adminLoading.value = true
   adminError.value = ''
   try {
-    adminUsers.value = await getAdminUsers()
+    const [users, logs] = await Promise.all([
+      getAdminUsers(),
+      getAdminAuditLogs()
+    ])
+
+    adminUsers.value = users
+    adminAuditLogs.value = logs
   } catch (err: unknown) {
-    adminError.value = extractApiError(err, 'Impossible de charger les utilisateurs.')
+    adminError.value = extractApiError(err, 'Impossible de charger la console admin.')
     console.error(err)
   } finally {
     adminLoading.value = false
@@ -338,7 +351,7 @@ async function loadAdminUsers() {
 async function handleDeactivateUser(username: string) {
   try {
     await deactivateUser(username)
-    await loadAdminUsers()
+    await loadAdminConsole()
   } catch (err: unknown) {
     adminError.value = extractApiError(err, 'Impossible de désactiver cet utilisateur.')
     console.error(err)
@@ -348,7 +361,7 @@ async function handleDeactivateUser(username: string) {
 async function handleReactivateUser(username: string) {
   try {
     await reactivateUser(username)
-    await loadAdminUsers()
+    await loadAdminConsole()
   } catch (err: unknown) {
     adminError.value = extractApiError(err, 'Impossible de réactiver cet utilisateur.')
     console.error(err)
@@ -620,7 +633,7 @@ onMounted(async () => {
   if (getAccessToken()) {
     await loadHistory()
     if (authState.value?.role === 'Admin') {
-      await loadAdminUsers()
+      await loadAdminConsole()
     }
   }
 })

@@ -2,6 +2,7 @@ using ApiSecurityScanner.Application.DTOs;
 using ApiSecurityScanner.Application.UseCases;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace ApiSecurityScanner.API.Controllers;
 
@@ -10,8 +11,10 @@ namespace ApiSecurityScanner.API.Controllers;
 [Route("api/[controller]")]
 public class AdminController(
     GetAdminUserActivityUseCase getAdminUserActivityUseCase,
+    GetAdminAuditLogsUseCase getAdminAuditLogsUseCase,
     GetAdminScanByIdUseCase getAdminScanByIdUseCase,
     CompareAdminScansUseCase compareAdminScansUseCase,
+    RecordAdminAuditLogUseCase recordAdminAuditLogUseCase,
     DeactivateUserUseCase deactivateUserUseCase,
     ReactivateUserUseCase reactivateUserUseCase) : ControllerBase
 {
@@ -22,6 +25,13 @@ public class AdminController(
         return Ok(users);
     }
 
+    [HttpGet("audit-logs")]
+    public async Task<ActionResult<IReadOnlyList<AdminAuditLogDto>>> GetAuditLogs(CancellationToken cancellationToken)
+    {
+        var logs = await getAdminAuditLogsUseCase.ExecuteAsync(cancellationToken: cancellationToken);
+        return Ok(logs);
+    }
+
     [HttpGet("scans/{id:guid}")]
     public async Task<ActionResult<ScanReportDto>> GetScanById(Guid id, CancellationToken cancellationToken)
     {
@@ -30,6 +40,14 @@ public class AdminController(
         {
             return NotFound(new { message = "Scan not found." });
         }
+
+        await recordAdminAuditLogUseCase.ExecuteAsync(
+            GetCurrentAdminUsername(),
+            "ViewUserScanReport",
+            null,
+            id,
+            $"Consultation du rapport utilisateur {id}.",
+            cancellationToken);
 
         return Ok(scan);
     }
@@ -46,6 +64,14 @@ public class AdminController(
             return NotFound(new { message = "One or both scans were not found." });
         }
 
+        await recordAdminAuditLogUseCase.ExecuteAsync(
+            GetCurrentAdminUsername(),
+            "CompareUserScans",
+            null,
+            currentScanId,
+            $"Comparaison admin entre les scans {baselineScanId} et {currentScanId}.",
+            cancellationToken);
+
         return Ok(comparison);
     }
 
@@ -57,6 +83,14 @@ public class AdminController(
         {
             return NotFound(new { message = "User not found." });
         }
+
+        await recordAdminAuditLogUseCase.ExecuteAsync(
+            GetCurrentAdminUsername(),
+            "DeactivateUser",
+            username,
+            null,
+            $"Désactivation du compte {username}.",
+            cancellationToken);
 
         return NoContent();
     }
@@ -70,6 +104,28 @@ public class AdminController(
             return NotFound(new { message = "User not found." });
         }
 
+        await recordAdminAuditLogUseCase.ExecuteAsync(
+            GetCurrentAdminUsername(),
+            "ReactivateUser",
+            username,
+            null,
+            $"Réactivation du compte {username}.",
+            cancellationToken);
+
         return NoContent();
+    }
+
+    private string GetCurrentAdminUsername()
+    {
+        var username = User.FindFirstValue(ClaimTypes.Name)
+            ?? User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub");
+
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            throw new UnauthorizedAccessException("Missing name claim.");
+        }
+
+        return username;
     }
 }

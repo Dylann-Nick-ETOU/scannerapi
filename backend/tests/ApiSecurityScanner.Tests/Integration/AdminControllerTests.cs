@@ -119,6 +119,47 @@ public class AdminControllerTests(ApiSecurityScannerApiFactory factory) : IClass
     }
 
     [Fact]
+    public async Task GetAuditLogs_ShouldReturnRecentAdminActions()
+    {
+        using var client = CreateClient();
+        client.DefaultRequestHeaders.Add("X-Test-User", "admin");
+        client.DefaultRequestHeaders.Add("X-Test-Role", "Admin");
+
+        var deactivateResponse = await client.PostAsync("/api/admin/users/member/deactivate", null);
+        deactivateResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var response = await client.GetAsync("/api/admin/audit-logs");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var payload = await response.Content.ReadAsStringAsync();
+        payload.Should().Contain("DeactivateUser");
+        payload.Should().Contain("member");
+    }
+
+    [Fact]
+    public async Task GetScanById_ShouldWriteAdminAuditLog()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiSecurityScannerDbContext>();
+        var scanId = db.Scans.Single(x => x.TargetName == "member-api").Id;
+
+        using var client = CreateClient();
+        client.DefaultRequestHeaders.Add("X-Test-User", "admin");
+        client.DefaultRequestHeaders.Add("X-Test-Role", "Admin");
+
+        var response = await client.GetAsync($"/api/admin/scans/{scanId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var verificationScope = factory.Services.CreateScope();
+        var verificationDb = verificationScope.ServiceProvider.GetRequiredService<ApiSecurityScannerDbContext>();
+        verificationDb.AdminAuditLogs.Should().ContainSingle(x =>
+            x.ActionType == "ViewUserScanReport" &&
+            x.AdminUsername == "admin" &&
+            x.TargetScanId == scanId);
+    }
+
+    [Fact]
     public async Task DeactivateUser_ShouldDisableAccount_ForAdmin()
     {
         using var client = CreateClient();

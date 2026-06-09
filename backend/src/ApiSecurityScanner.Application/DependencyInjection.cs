@@ -30,6 +30,8 @@ public static class DependencyInjection
         services.AddScoped<CompareScansUseCase>();
         services.AddScoped<CompareAdminScansUseCase>();
         services.AddScoped<GetAdminUserActivityUseCase>();
+        services.AddScoped<GetAdminAuditLogsUseCase>();
+        services.AddScoped<RecordAdminAuditLogUseCase>();
         services.AddScoped<DeactivateUserUseCase>();
         services.AddScoped<ReactivateUserUseCase>();
         services.AddScoped<DeleteScanUseCase>();
